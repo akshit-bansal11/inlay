@@ -34,6 +34,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyState, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, RegisterHotKey, UnregisterHotKey, VK_DOWN,
     VK_SHIFT, VK_UP,
 };
+use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::core::{HSTRING, PCWSTR, Result, w};
 
