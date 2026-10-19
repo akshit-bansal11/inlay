@@ -77,7 +77,7 @@ const LIMITS: { kind: Kind; text: string }[] = [
   },
   {
     kind: "accepted",
-    text: "Word timing is off by default. It depends on community-run LyricsPlus servers that Inlay does not host or check; with it off, or when none answers, lyrics use line timing from LRCLIB.",
+    text: "Word timing is off by default for new installs (an existing config keeps its word_sync value). It depends on community-run LyricsPlus servers that Inlay does not host or check; with it off, or when none answers, lyrics use line timing from LRCLIB.",
   },
   {
     kind: "accepted",
@@ -113,7 +113,7 @@ const HISTORY: { version: string; date: string; summary: string }[] = [
     version: "2.1.0",
     date: "2026-10-20",
     summary:
-      "A preview for macOS and Linux: the same four widgets, reading the same config.toml format, with Spotify read through AppleScript or MPRIS and a tray or menu-bar icon; not yet tried on real machines beyond CI, and without the settings panel, edit layout, hotkeys or start at login. The Windows exe carries version information. Word-by-word timing is off by default, with a switch in settings, and the lyrics widget wakes at each new line instead of redrawing every frame. Lyrics servers must use https. Programs the app starts are no longer named bare. The repository is now akshit-bansal11/inlay and the website inlay.akshitbansal.dev.",
+      "A preview for macOS and Linux: the same four widgets, reading the same config.toml format, with Spotify read through AppleScript or MPRIS and a tray or menu-bar icon; not yet tried on real machines beyond CI, and without the settings panel, edit layout, hotkeys or start at login. The Windows exe carries version information. Word-by-word timing is off by default for new installs, with a switch in settings; in complete mode the lyrics widget then wakes at each new line instead of redrawing every frame. On macOS and Linux the visualizer listens only while Spotify plays. Lyrics servers must use https. Programs the app starts are no longer named bare. The repository is now akshit-bansal11/inlay and the website inlay.akshitbansal.dev.",
   },
   {
     version: "2.0.0",

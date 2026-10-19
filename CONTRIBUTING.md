@@ -38,13 +38,13 @@ cargo clippy -p inlay-core -p inlay-desk --all-targets -- -D warnings
 cargo test -p inlay-core -p inlay-desk
 ```
 
-CI builds and checks both front-ends: the Windows gate for `crates/app`, and the two commands above for `crates/desk`.
+CI builds and checks both front-ends: the Windows gate for `crates/app`, and the commands above for `crates/desk`, plus `cargo fmt --all --check` and a release build.
 
 ### Where to start without Spotify
 
 `crates/core` has no Windows types at all, and holds most of the logic that matters: lyric parsing and timing, the sync clock, band mapping, colour, the config schema and its migrations. Its tests run anywhere, in milliseconds.
 
-`crates/app` needs Windows; `crates/desk` needs macOS or Linux. The snapshot mode draws every widget from made-up data, with no GPU, no Spotify and no audio device, which is how CI checks the drawing code and how you can see a visual change without a live session. What it cannot show is anything in the app loop: dragging, the settings panel's pointer handling, the tray, live reload. Those need a real run.
+`crates/app` needs Windows; `crates/desk` needs macOS or Linux. The snapshot mode belongs to the Windows app only (`crates/desk` has none). It draws every widget from made-up data, with no GPU, no Spotify and no audio device, which is how CI checks the drawing code and how you can see a visual change without a live session. What it cannot show is anything in the app loop: dragging, the settings panel's pointer handling, the tray, live reload. Those need a real run.
 
 ## Making a change
 

@@ -90,9 +90,9 @@ const LIGHT: string[] = [
 
 const LIMITS: string[] = [
   "The full app needs Windows 11. The visualizer, lyrics and player need the Spotify desktop app playing on the same PC: playback sent to another device through Spotify Connect is not seen.",
-  "The macOS and Linux build is a preview, not yet tried on real machines beyond CI. It has no settings panel, edit layout, hotkeys, start at login, vertical text or letter spacing, Wayland may ignore window positions, and GNOME cannot keep widgets below windows.",
+  "The macOS and Linux build is a preview, not yet tried on real machines beyond CI. It has no settings panel, edit layout, hotkeys, start at login, vertical text or letter spacing, Wayland may ignore window positions, and GNOME cannot keep widgets below windows. The visualizer listens to the default input, which may be the microphone, and only while Spotify plays. Linux may list widgets in the taskbar and Alt-Tab, and macOS in Mission Control.",
   "The exe is not code-signed, so Windows SmartScreen warns the first time you run it.",
-  "Word timing is off by default. It depends on community-run LyricsPlus servers that Inlay does not host or check; line timing from LRCLIB needs no opt-in and is the fallback.",
+  "Word timing is off by default for new installs; an existing config keeps its word_sync value. It depends on community-run LyricsPlus servers that Inlay does not host or check; line timing from LRCLIB needs no opt-in and is the fallback.",
   "Memory use was measured once at about 54 MB; how it was measured was not recorded.",
   "The settings panel, dragging in edit layout, the transport buttons, the word-by-word fill and Win+D are not checked by automated tests. Some are drawn in CI snapshots; none has been checked by hand.",
 ];

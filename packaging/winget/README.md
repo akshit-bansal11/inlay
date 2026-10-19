@@ -6,7 +6,7 @@ The files here are a record of what is to be submitted. winget does not read the
 
 ## The rename
 
-Versions 1.0.0 to 1.4.0 were prepared as `AkshitBansal.Deskbeat` but never accepted into winget-pkgs; their folders are kept for history. 2.0.0 is the manifest to submit. 2.1.0's manifest follows once its release exists, because its `InstallerSha256` is only known then. From the first release named Inlay, the folder holds `AkshitBansal.Inlay.*` files with `PackageName: Inlay`, and `submit.sh` submits it as a new package. Once it is in, the old package can be retired by a pull request to winget-pkgs that removes `AkshitBansal.Deskbeat`.
+Versions 1.0.0 to 1.4.0 were prepared as `AkshitBansal.Deskbeat` but never accepted into winget-pkgs; their folders are kept for history. 2.0.0 is the manifest to submit. 2.1.0's manifest follows once its release exists, because its `InstallerSha256` is only known then. From the first release named Inlay, the folder holds `AkshitBansal.Inlay.*` files with `PackageName: Inlay`, and `submit.sh` submits it as a new package.
 
 ## Submitting
 

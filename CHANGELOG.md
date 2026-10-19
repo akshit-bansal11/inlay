@@ -24,8 +24,10 @@ uses [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 - Word-by-word timing is **off by default** (`word_sync = false`, a switch in
   settings). Turn it on to ask the community-run LyricsPlus servers; Inlay
-  does not host or check them. With it off, the lyrics widget wakes at each
-  new line instead of redrawing every frame.
+  does not host or check them. New installs only: an existing `config.toml`
+  keeps its setting; set `word_sync = false` to turn it off. With it off, the
+  lyrics widget wakes at each new line instead of redrawing every frame, in
+  complete mode; progress mode still fills the line smoothly.
 - Lyrics servers must use `https://`; others are refused.
 - Settings open on the first run.
 - The README, SECURITY.md, CONTRIBUTING.md and the architecture notes are
@@ -45,7 +47,7 @@ uses [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 - Programs the app starts are no longer named bare, so the system cannot
   resolve them from an unexpected place.
 - Album art over 4096 pixels a side is refused.
-- A capture handle that was not closed is closed.
+- The audio-activation event is no longer closed while its handler may still signal it.
 - Claims in the documentation that the app did not back up were corrected,
   including the architecture notes on which thread computes the spectrum.
 

@@ -28,7 +28,7 @@ const SOURCES: { what: string; from: string; detail: string }[] = [
     what: "Lyrics",
     from: "LRCLIB, then a LyricsPlus server",
     detail:
-      "LRCLIB answers first, with the time each line starts. With word timing on (it is off by default), a LyricsPlus server, when it has the track, then replaces that with the time each syllable is sung.",
+      "LRCLIB answers first, with the time each line starts. With word timing on (off by default for new installs; an existing config keeps its setting), a LyricsPlus server, when it has the track, then replaces that with the time each syllable is sung.",
   },
 ];
 
@@ -166,12 +166,12 @@ export function InternalsSections() {
         <P>
           The servers asked for word timing are <C>word_servers</C> under{" "}
           <C>[lyrics]</C>, tried in order, and only when word timing is on (the settings
-          switch, or <C>word_sync = true</C>); it is off by default. Only https servers
-          are accepted. They are community-run mirrors serving lyrics from other
-          services (one answered from Apple Music&apos;s catalog when checked); Inlay
-          does not host or check them. They come and go, which is why the list is a
-          setting and not only a constant in the code. When none answers, or with word
-          timing off, lyrics use line timing from LRCLIB.
+          switch, or <C>word_sync = true</C>); it is off by default for new installs.
+          Only https servers are accepted. They are community-run mirrors serving lyrics
+          from other services (one answered from Apple Music&apos;s catalog when
+          checked); Inlay does not host or check them. They come and go, which is why
+          the list is a setting and not only a constant in the code. When none answers,
+          or with word timing off, lyrics use line timing from LRCLIB.
         </P>
 
         <Sub>Keeping lyrics in time</Sub>

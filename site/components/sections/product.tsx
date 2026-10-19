@@ -310,16 +310,18 @@ export function ProductSections() {
           permission once, or through MPRIS on Linux.
         </P>
         <P>
-          The visualizer listens to the system&apos;s default input. Set that to a
-          monitor of your speakers (PulseAudio or PipeWire), or to a loopback device
-          such as BlackHole.
+          The visualizer listens to the system&apos;s default input, and only while
+          Spotify plays. Out of the box that may be the microphone, and macOS asks for
+          microphone access the first time. Point it at a monitor of your speakers
+          (PulseAudio or PipeWire), or at a loopback device such as BlackHole.
         </P>
         <P>
           A tray or menu-bar icon offers Open config file, Open fonts folder and Quit;
           GNOME needs the AppIndicator extension to show it. The preview has no settings
           panel, edit layout, hotkeys, start at login, vertical text or letter spacing.
           Wayland may ignore window positions, and GNOME cannot keep widgets below
-          windows.
+          windows. On Linux each widget may show in the taskbar and Alt-Tab, and on
+          macOS in Mission Control.
         </P>
         <P>
           Inlay.app is ad-hoc signed and not notarized. The first time, open System

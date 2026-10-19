@@ -41,7 +41,7 @@ The visualizer, lyrics and player follow whatever Spotify plays. There's no Spot
 A widget is redrawn only when something on it changes. Nothing is drawn while it sits still.
 
 - **One native process.** Rust and Direct2D, with no webview, no runtime and no skin interpreter.
-- **Event-driven.** The clock wakes once a minute and the player once a second. The lyrics widget wakes at each new line; with word timing on, it redraws every frame while a line is being sung. The visualizer runs only while there's sound.
+- **Event-driven.** The clock wakes once a minute and the player once a second. In complete mode the lyrics widget wakes at each new line; in progress mode, or with word timing on, it redraws every frame while a line is being sung. The visualizer runs only while there's sound.
 - **Nothing hidden is drawn.** A widget under a maximized or fullscreen window stops entirely.
 - **The low-power GPU.** On a laptop with two GPUs, it uses the integrated one.
 
@@ -69,6 +69,7 @@ New in 2.1.0, and not yet tried on real machines beyond CI. It draws the same fo
 - Edit-layout dragging, hotkeys and start at login.
 - Vertical or sideways text, letter spacing, and per-label font weights beyond the face found.
 - Wayland doesn't let apps place their windows, so positions may be ignored there. On GNOME, widgets can't stay below other windows.
+- On Linux each widget may show in the taskbar and Alt-Tab; there is no way to hide them there. On macOS they may show in Mission Control.
 
 **Install**
 
@@ -86,7 +87,7 @@ New in 2.1.0, and not yet tried on real machines beyond CI. It draws the same fo
 **Spotify and sound**
 
 - Spotify is read through AppleScript on macOS and MPRIS on Linux. On some versions Spotify's MPRIS position stays at 0, which makes lyrics lag.
-- The visualizer listens to the system's **default input**; there is no per-app capture. Set the default input to a monitor of your speakers (PulseAudio or PipeWire "Monitor of ...") on Linux, or to a loopback device such as BlackHole on macOS.
+- The visualizer listens to the system's **default input**, and only while Spotify is playing; there is no per-app capture. Out of the box that input may be the microphone, and macOS asks for microphone access the first time. Point it at a loopback or monitor device instead. Set the default input to a monitor of your speakers (PulseAudio or PipeWire "Monitor of ...") on Linux, or to a loopback device such as BlackHole on macOS.
 - Album art is downloaded from the https address Spotify gives. Windows gets it from the system instead.
 
 ## Use
@@ -149,11 +150,11 @@ That records, for eight seconds, what Windows reports about the track and how lo
 
 Errors go to `%LOCALAPPDATA%\inlay\inlay.log`. The lyrics cache is in the same folder and is safe to delete.
 
-Word timing is off by default. When you turn it on (settings, or `word_sync = true` in the config), it depends on community-run LyricsPlus servers; when none answers, lyrics fall back to line timing from LRCLIB.
+Word timing is off by default for new installs; an existing config keeps its `word_sync` value (`word_sync = false` turns it off). When you turn it on (settings, or `word_sync = true` in the config), it depends on community-run LyricsPlus servers; when none answers, lyrics fall back to line timing from LRCLIB.
 
 ## What goes over the network
 
-Only lyrics lookups, and on macOS and Linux album art. For each new track, its title, artist, album and length go over HTTPS to [LRCLIB](https://lrclib.net) whenever the lyrics widget is on. Only when word timing is on (it is off by default) do they also go to the community-run LyricsPlus servers listed in the config, which serve word-timed lyrics mirrored from other services; Inlay does not host or check them, so turn it on at your own discretion. Only `https://` lyric servers are accepted. Nothing else is sent: no identifier, no listening history, no audio. On macOS and Linux the album art is downloaded from the https address Spotify gives. Turning the lyrics widget off stops the lyrics requests. [SECURITY.md](SECURITY.md) has the full model.
+Only lyrics lookups, and on macOS and Linux album art. For each new track, its title, artist, album and length go over HTTPS to [LRCLIB](https://lrclib.net) whenever the lyrics widget is on. Only when word timing is on (off by default for new installs; an existing config keeps its `word_sync` value, and `word_sync = false` turns it off) do they also go to the community-run LyricsPlus servers listed in the config, which serve word-timed lyrics mirrored from other services; Inlay does not host or check them, so turn it on at your own discretion. Only `https://` lyric servers are accepted. Nothing else is sent: no identifier, no listening history, no audio. On macOS and Linux the album art is downloaded from the https address Spotify gives. Turning the lyrics widget off stops the lyrics requests. [SECURITY.md](SECURITY.md) has the full model.
 
 ## What has and hasn't been tested
 
