@@ -1141,7 +1141,7 @@ mod tests {
     #[test]
     fn word_servers_keep_only_https() {
         let cfg = Config::from_toml(
-            "[lyrics]\nword-servers = [\"http://a.example\", \"https://b.example\"]\n",
+            "[lyrics]\nword_servers = [\"http://a.example\", \"https://b.example\"]\n",
         )
         .unwrap();
         assert_eq!(cfg.lyrics.word_servers, ["https://b.example"]);

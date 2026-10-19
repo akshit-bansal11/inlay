@@ -21,6 +21,8 @@ use crate::{art, clock, fonts, lyrics, lyrics_view, media, paths, player, visual
 const RELOAD_EVERY: Duration = Duration::from_secs(2);
 /// How often Spotify is asked what is playing.
 const MEDIA_EVERY: Duration = Duration::from_millis(500);
+/// Slower polling while nothing plays, so a closed Spotify is not probed (an osascript run) twice a second.
+const MEDIA_IDLE: Duration = Duration::from_secs(2);
 /// The player's progress bar moves this often while playing.
 const PROGRESS_EVERY: Duration = Duration::from_secs(1);
 /// Spotify green, used when the accent is automatic and there is no album art (as on Windows).
@@ -87,6 +89,7 @@ fn spawn_media(ctx: Context) -> (Sender<Command>, Playing) {
         let mut source = media::open();
         loop {
             let track = source.poll().map(|t| (t, Instant::now()));
+            let last_playing = track.as_ref().is_some_and(|(t, _)| t.playing);
             if let Ok(mut slot) = shared.lock() {
                 let changed = match (&*slot, &track) {
                     (Some((a, _)), Some((b, _))) => !same_state(a, b),
@@ -98,7 +101,11 @@ fn spawn_media(ctx: Context) -> (Sender<Command>, Playing) {
                     ctx.request_repaint();
                 }
             }
-            match inbox.recv_timeout(MEDIA_EVERY) {
+            match inbox.recv_timeout(if last_playing {
+                MEDIA_EVERY
+            } else {
+                MEDIA_IDLE
+            }) {
                 Ok(command) => source.send(command),
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => return,
@@ -144,14 +151,21 @@ impl eframe::App for InlayApp {
         [0.0; 4]
     }
 
+    // Runs before `ui` every frame, and also when every widget is covered and `ui` is not
+    // called, so the tray, config reload and track sync never stall.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.handle_tray(ctx);
+        let reload_in = self.reload_config(ctx);
+        self.sync_track(ctx);
+        self.take_art(ctx);
+        self.sync_spectrum(ctx);
+        ctx.request_repaint_after(reload_in);
+    }
+
     // Viewports can only be shown from `ui`; `logic` may not show any ui.
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        self.handle_tray(&ctx);
-        let mut wake = self.reload_config(&ctx);
-        self.sync_track(&ctx);
-        self.take_art(&ctx);
-        self.sync_spectrum(&ctx);
+        let mut wake = RELOAD_EVERY;
 
         // ponytail: 1920x1080 until egui reports the monitor; multi-monitor work areas
         // come with a monitor picker.
@@ -237,7 +251,7 @@ impl eframe::App for InlayApp {
                     }
                 },
             );
-            if let Some(next) = next {
+            if playing && let Some(next) = next {
                 wake = wake.min(next);
             }
         }
@@ -385,9 +399,11 @@ impl InlayApp {
         self.art = Some(ctx.load_texture("art", image, TextureOptions::LINEAR));
     }
 
-    /// Runs audio capture only while the visualizer is on.
+    /// Runs audio capture only while the visualizer is on and Spotify is playing.
     fn sync_spectrum(&mut self, ctx: &Context) {
-        if !self.settings.cfg.visualizer.enabled {
+        // Capture only while Spotify plays: the default input may be the microphone, and listening while idle would keep the app awake and the mic in use.
+        let playing = self.track.as_ref().is_some_and(|t| t.playing);
+        if !(self.settings.cfg.visualizer.enabled && playing) {
             self.spectrum = None;
             self.spectrum_failed = false;
         } else if self.spectrum.is_none() && !self.spectrum_failed {

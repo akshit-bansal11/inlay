@@ -19,7 +19,6 @@ const POLL: &str = r#"if application "Spotify" is running then
 end if
 return """#;
 
-#[derive(Default)]
 pub struct Spotify;
 
 impl Media for Spotify {

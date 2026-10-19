@@ -34,6 +34,10 @@ fn seek_ms(x: f32, left: f32, width: f32, duration_ms: i64) -> i64 {
 /// Decodes album art bytes (PNG or JPEG) into an egui image, or None.
 pub fn decode_art(bytes: &[u8]) -> Option<ColorImage> {
     let rgba = image::load_from_memory(bytes).ok()?.to_rgba8();
+    // Album art is drawn small; a huge image is refused rather than uploaded as a texture.
+    if rgba.width() > 4096 || rgba.height() > 4096 {
+        return None;
+    }
     let size = [rgba.width() as usize, rgba.height() as usize];
     Some(ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()))
 }

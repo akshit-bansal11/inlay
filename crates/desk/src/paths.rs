@@ -17,7 +17,7 @@ pub fn fonts_dir() -> Option<PathBuf> {
     config_dir().map(|d| d.join("fonts"))
 }
 
-/// Lyrics cache and the log: ~/Library/Caches/inlay on macOS, ~/.cache/inlay on Linux.
+/// The lyrics cache: ~/Library/Caches/inlay on macOS, ~/.cache/inlay on Linux.
 pub fn cache_dir() -> Option<PathBuf> {
     dirs::cache_dir().map(|d| d.join("inlay"))
 }

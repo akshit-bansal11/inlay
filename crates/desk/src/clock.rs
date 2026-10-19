@@ -59,13 +59,15 @@ pub fn draw(painter: &Painter, rect: Rect, cfg: &Config, now: &LocalTime, scale:
         };
         let color =
             color_of(&label.color, &cfg.theme).gamma_multiply(label.opacity * clock.opacity);
-        // ponytail: the label's font, weight, letter spacing and vertical direction are
-        // not drawn yet; fonts by name come with the font loader.
+        // ponytail: weight, letter spacing and vertical direction are not drawn yet.
         painter.text(
             rect.min + vec2(label.x, label.y) * scale,
             anchor,
             text,
-            FontId::proportional(label.size * scale),
+            FontId::new(
+                label.size * scale,
+                crate::fonts::family(&label.font, &cfg.theme.font),
+            ),
             color,
         );
     }
@@ -80,7 +82,8 @@ pub fn next_change(cfg: &ClockCfg, now: &LocalTime) -> Duration {
     ]
     .iter()
     .any(|(shown, f)| *shown && shows_seconds(f));
+    let ms = u64::from(chrono::Local::now().timestamp_subsec_millis());
     let left = if secs { 1 } else { 60 - now.second.min(59) };
-    // 50 ms past the tick, so the repaint lands after the text changes, not before.
-    Duration::from_millis(u64::from(left) * 1000 + 50)
+    // Aligned to the tick, plus 50 ms so the repaint lands after the text changes, not before.
+    Duration::from_millis((u64::from(left) * 1000).saturating_sub(ms) + 50)
 }

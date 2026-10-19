@@ -19,7 +19,7 @@ pub trait Media {
 /// The media source for this system.
 pub fn open() -> Box<dyn Media> {
     #[cfg(target_os = "macos")]
-    return Box::new(macos::Spotify::default());
+    return Box::new(macos::Spotify);
     #[cfg(target_os = "linux")]
     return Box::new(linux::Spotify::default());
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]

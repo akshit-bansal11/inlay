@@ -165,7 +165,7 @@ pub fn draw(
             let text = if matches!(lyrics, Lyrics::Missing) {
                 "No lyrics for this song"
             } else {
-                "Lyrics unavailable offline"
+                "Lyrics unavailable right now"
             };
             let (anchor, x) = match l.align {
                 Align::Left => (Align2::LEFT_CENTER, rect.left() + pad),
