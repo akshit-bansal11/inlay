@@ -220,9 +220,9 @@ export function ReferenceSections() {
         </ul>
         <Note label="What the two labels mean">
           <strong className="text-foreground">accepted</strong> is a cost of how Inlay
-          is built today. <strong className="text-foreground">unverified</strong> is
-          not checked by automated tests, though some of it is drawn in CI snapshots,
-          and has not been checked by hand.
+          is built today. <strong className="text-foreground">unverified</strong> is not
+          checked by automated tests, though some of it is drawn in CI snapshots, and
+          has not been checked by hand.
         </Note>
 
         <Sub>Tested on a real Windows 11 desktop</Sub>

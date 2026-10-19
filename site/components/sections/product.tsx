@@ -298,8 +298,7 @@ export function ProductSections() {
         <Sub>macOS and Linux (preview)</Sub>
         <P>
           Version 2.1.0 adds a preview for macOS and Linux that has not yet been tried
-          on real machines beyond CI. Download{" "}
-          <C>Inlay-&lt;version&gt;-macos.zip</C> or{" "}
+          on real machines beyond CI. Download <C>Inlay-&lt;version&gt;-macos.zip</C> or{" "}
           <C>Inlay-&lt;version&gt;-linux-x86_64.tar.gz</C> from the same release.
         </P>
         <P>
@@ -317,10 +316,10 @@ export function ProductSections() {
         </P>
         <P>
           A tray or menu-bar icon offers Open config file, Open fonts folder and Quit;
-          GNOME needs the AppIndicator extension to show it. The preview has no
-          settings panel, edit layout, hotkeys, start at login, vertical text or
-          letter spacing. Wayland may ignore window positions, and GNOME cannot keep
-          widgets below windows.
+          GNOME needs the AppIndicator extension to show it. The preview has no settings
+          panel, edit layout, hotkeys, start at login, vertical text or letter spacing.
+          Wayland may ignore window positions, and GNOME cannot keep widgets below
+          windows.
         </P>
         <P>
           Inlay.app is ad-hoc signed and not notarized. The first time, open System
