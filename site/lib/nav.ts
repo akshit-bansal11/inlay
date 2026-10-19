@@ -58,16 +58,16 @@ export const ALL_NAV_IDS: string[] = NAV.flatMap((group) =>
   group.items.map((item) => item.id),
 );
 
-export const REPO = "https://github.com/akshit-bansal11/deskbeat";
+export const REPO = "https://github.com/akshit-bansal11/inlay";
 export const LATEST_RELEASE = `${REPO}/releases/latest`;
 
 /** The site's one origin. Canonical links, the sitemap and robots.txt all resolve against it. */
-export const SITE = "https://deskbeat.akshitbansal.dev";
+export const SITE = "https://inlay.akshitbansal.dev";
 
 /** The card a shared link unfurls into: the repository's own social preview, 1280×640. */
 export const SOCIAL_IMAGE = {
   url: "/social-preview.png",
   width: 1280,
   height: 640,
-  alt: "Inlay: live widgets, set into your Windows desktop. A clock, a spectrum visualizer, synced lyrics and a now-playing player.",
+  alt: "Inlay: live widgets, set into your desktop. A clock, a spectrum visualizer, synced lyrics and a now-playing player.",
 };

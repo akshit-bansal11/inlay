@@ -27,7 +27,7 @@ export const metadata: Metadata = {
 };
 
 const FACTS: { term: string; value: string }[] = [
-  { term: "Runs on", value: "Windows 11" },
+  { term: "Runs on", value: "Windows 11; macOS and Linux preview" },
   { term: "Music widgets follow", value: "The Spotify desktop app" },
   { term: "Built with", value: "Rust and Direct2D" },
   { term: "Install", value: "One exe, no installer" },
@@ -47,7 +47,7 @@ const WIDGETS: { title: string; Icon: LucideIcon; body: string }[] = [
   {
     title: "Lyrics",
     Icon: MicVocal,
-    body: "Time-synced lyrics, followed word by word where the song has timed words and line by line where it does not. What is being sung either lights up at once or fills as it is sung. Word timing comes from a LyricsPlus server and is never guessed; line timing comes from LRCLIB. Cached on disk.",
+    body: "Time-synced lyrics, followed line by line, or word by word where the song has timed words and you turn word timing on in the settings. What is being sung either lights up at once or fills as it is sung. Word timing comes from a community-run LyricsPlus server and is never guessed; line timing comes from LRCLIB and needs no opt-in. Cached on disk.",
   },
   {
     title: "Player",
@@ -69,7 +69,7 @@ const WIDGETS: { title: string; Icon: LucideIcon; body: string }[] = [
 const STEPS: { title: string; body: string }[] = [
   {
     title: "It draws only what changed",
-    body: "Each widget is compiled, sleeps until something it shows has changed, and is not drawn at all while it is covered. The clock wakes once a minute, lyrics at the next line, the player once a second.",
+    body: "Each widget is compiled, sleeps until something it shows has changed, and is not drawn at all while it is covered. The clock wakes once a minute, lyrics at each new line (every frame while a line is sung, with word timing on), the player once a second.",
   },
   {
     title: "Windows says what is playing",
@@ -89,11 +89,12 @@ const LIGHT: string[] = [
 ];
 
 const LIMITS: string[] = [
-  "It needs Windows 11. The visualizer, lyrics and player need the Spotify desktop app playing on the same PC: playback sent to another device through Spotify Connect is not seen.",
+  "The full app needs Windows 11. The visualizer, lyrics and player need the Spotify desktop app playing on the same PC: playback sent to another device through Spotify Connect is not seen.",
+  "The macOS and Linux build is a preview, not yet tried on real machines beyond CI. It has no settings panel, edit layout, hotkeys, start at login, vertical text or letter spacing, Wayland may ignore window positions, and GNOME cannot keep widgets below windows.",
   "The exe is not code-signed, so Windows SmartScreen warns the first time you run it.",
-  "Word timing depends on community-run LyricsPlus servers. When none answers, lyrics fall back to line timing from LRCLIB.",
-  "Memory use measured about 54 MB, above the 40 MB this was aiming for.",
-  "The settings panel, dragging in edit layout, the transport buttons and the word-by-word fill staying in time with a song are checked only by automated tests and rendered snapshots, not by hand.",
+  "Word timing is off by default. It depends on community-run LyricsPlus servers that Inlay does not host or check; line timing from LRCLIB needs no opt-in and is the fallback.",
+  "Memory use was measured once at about 54 MB; how it was measured was not recorded.",
+  "The settings panel, dragging in edit layout, the transport buttons, the word-by-word fill and Win+D are not checked by automated tests. Some are drawn in CI snapshots; none has been checked by hand.",
 ];
 
 const INSTALL: string[] = [
@@ -101,6 +102,7 @@ const INSTALL: string[] = [
   "Run it. SmartScreen asks first: More info, then Run anyway.",
   "It lives in the notification area. Double-click its icon for settings, or right-click it for a small menu.",
   "The clock shows at once. For the other three, play something in the Spotify desktop app.",
+  "On macOS or Linux (preview), download Inlay-<version>-macos.zip or Inlay-<version>-linux-x86_64.tar.gz instead. The full install guide has the first-run steps.",
 ];
 
 /** A section's heading block: a short accent eyebrow, a 900 title, a dim lede. */
@@ -161,16 +163,16 @@ export default function Page() {
                 fade would leave it invisible until the JavaScript arrives. */}
             <div>
               <p className="bg-card shadow-card text-dim inline-flex rounded-full px-4 py-1.5 text-sm font-bold">
-                Windows 11 · four live widgets · one native app
+                Windows 11 · macOS and Linux preview · four live widgets
               </p>
               <h1 className="mt-6 max-w-[15ch] text-[2.75rem] text-balance leading-[1.02] font-black tracking-[-0.025em] sm:text-6xl lg:text-7xl">
                 Live widgets, set into your Windows desktop.
               </h1>
               <p className="text-dim mt-6 max-w-[56ch] text-lg leading-relaxed md:text-xl">
                 Inlay draws a clock, a spectrum visualizer, time-synced lyrics and a
-                now-playing player on the Windows 11 desktop, behind your icons. Each
-                one redraws only when something on it changes, so it idles near zero. A
-                light alternative to Rainmeter.
+                now-playing player on the Windows 11 desktop, under your windows and
+                over the desktop icons. Each one redraws only when something on it
+                changes, so it idles near zero. A light alternative to Rainmeter.
               </p>
               <p className="text-dim mt-4 max-w-[56ch] text-base leading-relaxed md:text-lg">
                 The clock runs on its own. The other three follow whatever Spotify
@@ -343,7 +345,8 @@ export default function Page() {
         {/* Get it */}
         <section id="get" className={SECTION}>
           <Heading eyebrow="Get it" title="One file, from GitHub Releases.">
-            Each release carries the exe named for its version, a{" "}
+            Each release carries the Windows exe named for its version, the macOS and
+            Linux preview downloads, a{" "}
             <span className="font-mono text-[0.9em]">SHA256SUMS.txt</span> and a build
             provenance attestation, so a download can be checked against the workflow
             that built it.
@@ -358,6 +361,12 @@ export default function Page() {
                   <div className="mt-1.5 flex flex-wrap gap-2">
                     <Badge variant="solid">Windows 11</Badge>
                     <Badge variant="outline">Inlay-x.y.z.exe</Badge>
+                    <Badge variant="outline">
+                      macOS preview: Inlay-x.y.z-macos.zip
+                    </Badge>
+                    <Badge variant="outline">
+                      Linux preview: Inlay-x.y.z-linux-x86_64.tar.gz
+                    </Badge>
                   </div>
                 </div>
               </CardHeader>

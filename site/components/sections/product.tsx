@@ -23,7 +23,7 @@ const WIDGETS: { title: string; body: string }[] = [
   },
   {
     title: "Lyrics",
-    body: "Time-synced lyrics, followed word by word where the song has timed words and line by line where it does not. What is being sung either lights up at once or fills as it is sung. Word timing comes from a LyricsPlus server and is never guessed; line timing comes from LRCLIB. Cached on disk.",
+    body: "Time-synced lyrics, followed line by line, or word by word where the song has timed words and you turn word timing on in the settings. What is being sung either lights up at once or fills as it is sung. Word timing comes from a community-run LyricsPlus server and is never guessed; line timing comes from LRCLIB and needs no opt-in. Cached on disk.",
   },
   {
     title: "Player",
@@ -48,7 +48,7 @@ const LAYERS: { name: string; value: string; body: string }[] = [
   {
     name: "On the desktop",
     value: "desktop",
-    body: "On the wallpaper, under every window. The default.",
+    body: "On the desktop, under every window. The default.",
   },
   {
     name: "Normal window",
@@ -156,13 +156,15 @@ const CONFIG: { key: string; value: string; means: string }[] = [
   },
   {
     key: "lyrics.word_sync",
-    value: "true",
-    means: "Ask the servers below for the time each word is sung.",
+    value: "false",
+    means:
+      "Ask the servers below for the time each word is sung. The settings switch turns it on; line timing from LRCLIB needs no opt-in.",
   },
   {
     key: "lyrics.word_servers",
     value: "two LyricsPlus mirrors",
-    means: "The servers asked for word timing, tried in order. Yours to edit or empty.",
+    means:
+      "The servers asked for word timing, tried in order. Yours to edit or empty; only https servers are accepted.",
   },
   {
     key: "visualizer.style",
@@ -215,9 +217,9 @@ export function ProductSections() {
       >
         <P>
           It is built as a light alternative to a Rainmeter setup. The widgets are drawn
-          on the desktop itself, behind its icons, and redraw only when something on
-          them changes: the visualizer runs only while there is sound, and nothing is
-          drawn at all while a window covers the desktop.
+          on the desktop itself, under your windows and over the desktop icons, and
+          redraw only when something on them changes: the visualizer runs only while
+          there is sound, and nothing is drawn at all while a window covers the desktop.
         </P>
         <P>
           It is not a skin engine. There are no plugins, no scripts and no user-authored
@@ -293,6 +295,39 @@ export function ProductSections() {
           </li>
         </ol>
 
+        <Sub>macOS and Linux (preview)</Sub>
+        <P>
+          Version 2.1.0 adds a preview for macOS and Linux that has not yet been tried
+          on real machines beyond CI. Download{" "}
+          <C>Inlay-&lt;version&gt;-macos.zip</C> or{" "}
+          <C>Inlay-&lt;version&gt;-linux-x86_64.tar.gz</C> from the same release.
+        </P>
+        <P>
+          It draws the clock, the player, the lyrics and the visualizer from the same
+          config.toml format. The file is{" "}
+          <C>~/Library/Application Support/inlay/config.toml</C> on macOS and{" "}
+          <C>~/.config/inlay/config.toml</C> on Linux, and it reloads within 2 seconds
+          of saving. Spotify is read through AppleScript on macOS, which asks for
+          permission once, or through MPRIS on Linux.
+        </P>
+        <P>
+          The visualizer listens to the system&apos;s default input. Set that to a
+          monitor of your speakers (PulseAudio or PipeWire), or to a loopback device
+          such as BlackHole.
+        </P>
+        <P>
+          A tray or menu-bar icon offers Open config file, Open fonts folder and Quit;
+          GNOME needs the AppIndicator extension to show it. The preview has no
+          settings panel, edit layout, hotkeys, start at login, vertical text or
+          letter spacing. Wayland may ignore window positions, and GNOME cannot keep
+          widgets below windows.
+        </P>
+        <P>
+          Inlay.app is ad-hoc signed and not notarized. The first time, open System
+          Settings, then Privacy &amp; Security, and choose{" "}
+          <strong className="text-foreground">Open Anyway</strong>.
+        </P>
+
         <Sub>Checking a download</Sub>
         <P>
           Each release carries a <C>SHA256SUMS.txt</C> and a build provenance
@@ -301,8 +336,12 @@ export function ProductSections() {
         </P>
         <CodeBlock
           title="Verify the attestation"
-          code="gh attestation verify Inlay-<version>.exe --repo akshit-bansal11/deskbeat"
+          code="gh attestation verify Inlay-<version>.exe --repo akshit-bansal11/inlay"
         />
+        <P>
+          That is for 2.1.0 and later. For 2.0.0 and earlier, use{" "}
+          <C>--repo akshit-bansal11/deskbeat</C> instead.
+        </P>
       </Section>
 
       <Section
@@ -563,7 +602,7 @@ direction = "up"
 letters = "sideways"
 
 [lyrics]
-mode = "word"
+mode = "progress"
 offset_ms = 150
 
 [visualizer]
