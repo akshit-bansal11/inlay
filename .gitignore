@@ -24,3 +24,6 @@ Thumbs.db
 # The Vercel CLI's link to the website's project. `vercel link` also writes a
 # .env.local, which the first block already ignores.
 .vercel
+
+# Local agent notes: private, never published
+.claude/
