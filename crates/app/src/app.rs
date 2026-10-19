@@ -4,7 +4,6 @@
 //! that changed, then sleeps for exactly as long as the most impatient widget
 //! allows. With nothing playing that is forever: no timer, no frame, no CPU.
 
-use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc::Sender;
@@ -15,13 +14,16 @@ use inlay_core::config::{Config, Layer};
 use inlay_core::lrclib::Query;
 use inlay_core::timefmt::LocalTime;
 use windows::Win32::Foundation::{
-    ERROR_ALREADY_EXISTS, GetLastError, HANDLE, HWND, RECT, WAIT_OBJECT_0,
+    ERROR_ALREADY_EXISTS, ERROR_SUCCESS, GetLastError, HANDLE, HWND, RECT, WAIT_OBJECT_0,
 };
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 use windows::Win32::Graphics::Dwm::DwmFlush;
 use windows::Win32::Storage::FileSystem::{
     FILE_NOTIFY_CHANGE_FILE_NAME, FILE_NOTIFY_CHANGE_LAST_WRITE, FILE_NOTIFY_CHANGE_SIZE,
     FindFirstChangeNotificationW, FindNextChangeNotification,
+};
+use windows::Win32::System::Registry::{
+    HKEY_CURRENT_USER, REG_SZ, RRF_RT_REG_SZ, RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW,
 };
 use windows::Win32::System::SystemInformation::GetLocalTime;
 use windows::Win32::System::Threading::{CreateMutexW, INFINITE};
@@ -33,7 +35,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VK_SHIFT, VK_UP,
 };
 use windows::Win32::UI::WindowsAndMessaging::*;
-use windows::core::{HSTRING, Result, w};
+use windows::core::{HSTRING, PCWSTR, Result, w};
 
 use crate::capture::{self, Audio};
 use crate::gfx::{Gfx, Surface};
@@ -73,12 +75,11 @@ const DESKTOP_RECHECK_MS: f64 = 250.0;
 /// Space kept between a fitted widget's elements and the edge of its window,
 /// which is also the margin of the card drawn behind them.
 const FIT_PAD: f32 = 14.0;
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
-const RUN_VALUE: &str = "Inlay";
-const REPO_URL: &str = "https://github.com/akshit-bansal11/deskbeat";
+const RUN_SUBKEY: PCWSTR = w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+const RUN_NAME: PCWSTR = w!("Inlay");
+const REPO_URL: &str = "https://github.com/akshit-bansal11/inlay";
 /// The start-with-Windows entries under the app's earlier names.
-const OLD_RUN_VALUES: [&str; 2] = ["Deskbeat", "SonicVeil"];
+const OLD_RUN_NAMES: [PCWSTR; 2] = [w!("Deskbeat"), w!("SonicVeil")];
 
 /// Colours parsed from the config once, not on every frame.
 pub struct Palette {
@@ -223,28 +224,50 @@ fn read_config(path: &Path) -> (Config, String, bool) {
     }
 }
 
-fn reg(args: &[&str]) -> bool {
-    Command::new("reg")
-        .args(args)
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .is_ok_and(|output| output.status.success())
-}
-
+/// Whether Windows starts the app at sign-in: the Run key holds our value.
 fn autostart_enabled() -> bool {
-    reg(&["query", RUN_KEY, "/v", RUN_VALUE])
+    // SAFETY: both names are NUL-terminated wide literals; no output buffers are passed.
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            RUN_SUBKEY,
+            RUN_NAME,
+            RRF_RT_REG_SZ,
+            None,
+            None,
+            None,
+        )
+    };
+    status == ERROR_SUCCESS
 }
 
 fn set_autostart(on: bool) {
     let done = match (on, std::env::current_exe()) {
         (true, Ok(exe)) => {
-            let command = format!("\"{}\"", exe.display());
-            reg(&[
-                "add", RUN_KEY, "/v", RUN_VALUE, "/t", "REG_SZ", "/d", &command, "/f",
-            ])
+            // Quoted, so a path with spaces starts the right program.
+            let command: Vec<u16> = format!("\"{}\"", exe.display())
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
+            // SAFETY: `command` is NUL-terminated and outlives the call; the size is in bytes.
+            let status = unsafe {
+                RegSetKeyValueW(
+                    HKEY_CURRENT_USER,
+                    RUN_SUBKEY,
+                    RUN_NAME,
+                    REG_SZ.0,
+                    Some(command.as_ptr().cast()),
+                    (command.len() * 2) as u32,
+                )
+            };
+            status == ERROR_SUCCESS
         }
         (true, Err(_)) => false,
-        (false, _) => reg(&["delete", RUN_KEY, "/v", RUN_VALUE, "/f"]),
+        // SAFETY: both names are NUL-terminated wide literals.
+        (false, _) => {
+            let status = unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER, RUN_SUBKEY, RUN_NAME) };
+            status == ERROR_SUCCESS
+        }
     };
     if !done {
         log("could not change the start-with-Windows setting");
@@ -265,9 +288,9 @@ pub fn run() -> Result<()> {
     }
 
     // An old entry starts an exe that is no longer the app.
-    for old in OLD_RUN_VALUES {
-        if reg(&["query", RUN_KEY, "/v", old]) {
-            reg(&["delete", RUN_KEY, "/v", old, "/f"]);
+    for old in OLD_RUN_NAMES {
+        // SAFETY: both names are NUL-terminated wide literals.
+        if unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER, RUN_SUBKEY, old) } == ERROR_SUCCESS {
             set_autostart(true);
         }
     }
@@ -347,7 +370,8 @@ pub fn run() -> Result<()> {
             due: Due::Now,
         });
     }
-    if app.cfg_text.is_empty() {
+    let first_run = app.cfg_text.is_empty();
+    if first_run {
         // First run: write the defaults out so there is a file to edit.
         app.save_config();
     }
@@ -361,6 +385,10 @@ pub fn run() -> Result<()> {
     }
     // Whatever is already in front may be covering the desktop.
     app.foreground_changed(unsafe { GetForegroundWindow() });
+    if first_run {
+        // First run: the tray icon may be hidden in the overflow, so open settings once to show where everything is.
+        app.open_settings();
+    }
     app.run_loop();
     if app.save_at.is_some() {
         app.save_config();
@@ -687,9 +715,20 @@ impl App {
     fn picked(&mut self, pick: Pick) {
         match pick {
             Pick::GitHub => {
-                // Explorer hands an address to the default browser.
-                if let Err(error) = Command::new("explorer").arg(REPO_URL).spawn() {
-                    log(&format!("could not open the repository page: {error}"));
+                // The shell hands an address to the default browser.
+                // SAFETY: the verb is a NUL-terminated literal and the HSTRING outlives the call.
+                let opened = unsafe {
+                    ShellExecuteW(
+                        None,
+                        w!("open"),
+                        &HSTRING::from(REPO_URL),
+                        PCWSTR::null(),
+                        PCWSTR::null(),
+                        SW_SHOWNORMAL,
+                    )
+                };
+                if opened.0 as isize <= 32 {
+                    log("could not open the repository page");
                 }
             }
             Pick::Autostart => self.toggle_autostart(),
@@ -1129,7 +1168,12 @@ impl App {
         if !self.cfg_path.exists() {
             self.save_config();
         }
-        if let Err(error) = Command::new("notepad").arg(&self.cfg_path).spawn() {
+        // A full path: a bare name would be looked up beside the exe first.
+        let notepad = std::env::var_os("WINDIR")
+            .map_or_else(|| PathBuf::from(r"C:\Windows"), PathBuf::from)
+            .join("System32")
+            .join("notepad.exe");
+        if let Err(error) = Command::new(notepad).arg(&self.cfg_path).spawn() {
             log(&format!("could not open the config file: {error}"));
         }
     }

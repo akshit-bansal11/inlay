@@ -267,10 +267,10 @@ fn open_process(pid: u32) -> Result<Stream> {
             Some((&raw const variant).cast()),
             &handler,
         );
-        if operation.is_ok() {
-            WaitForSingleObject(done, 5000);
+        // On a timeout the handle is leaked on purpose: the handler may still signal it.
+        if operation.is_ok() && WaitForSingleObject(done, 5000) == WAIT_OBJECT_0 {
+            let _ = CloseHandle(done);
         }
-        let _ = CloseHandle(done);
 
         let mut status = HRESULT(0);
         let mut activated = None;

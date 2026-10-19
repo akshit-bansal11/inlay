@@ -733,7 +733,8 @@ impl Default for LyricsCfg {
             active_scale: 1.12,
             falloff: 0.25,
             unsung_opacity: 0.5,
-            word_sync: true,
+            // Off by default: word timing comes from community-run mirrors of another service's lyrics (see the README). LRCLIB's line timing needs no opt-in.
+            word_sync: false,
             word_servers: crate::lyricsplus::SERVERS.map(str::to_owned).to_vec(),
         }
     }
@@ -1038,6 +1039,9 @@ impl Config {
         l.lines_after = l.lines_after.min(8);
         l.offset_ms = l.offset_ms.clamp(-10_000, 10_000);
         l.scroll_ms = l.scroll_ms.min(2000);
+        // Lyrics lookups carry the track's title and artist: never over plain HTTP.
+        l.word_servers
+            .retain(|server| server.starts_with("https://"));
 
         let v = &mut self.visualizer;
         frame(&mut v.frame);
@@ -1132,6 +1136,15 @@ mod tests {
         assert_eq!(cfg.visualizer.style, VisualizerStyle::Wave);
         assert_eq!(cfg.visualizer.bars, 24);
         assert_eq!(cfg.clock, ClockCfg::default());
+    }
+
+    #[test]
+    fn word_servers_keep_only_https() {
+        let cfg = Config::from_toml(
+            "[lyrics]\nword-servers = [\"http://a.example\", \"https://b.example\"]\n",
+        )
+        .unwrap();
+        assert_eq!(cfg.lyrics.word_servers, ["https://b.example"]);
     }
 
     #[test]
