@@ -6,13 +6,13 @@ The files here are a record of what is to be submitted. winget does not read the
 
 ## The rename
 
-Versions 1.0.0 to 1.4.0 were published as `AkshitBansal.Deskbeat`, and their folders here keep that name as a record. From the first release named Inlay, the folder holds `AkshitBansal.Inlay.*` files with `PackageName: Inlay`, and `submit.sh` submits it as a new package. Once it is in, the old package can be retired by a pull request to winget-pkgs that removes `AkshitBansal.Deskbeat`.
+Versions 1.0.0 to 1.4.0 were prepared as `AkshitBansal.Deskbeat` but never accepted into winget-pkgs; their folders are kept for history. 2.0.0 is the manifest to submit. 2.1.0's manifest follows once its release exists, because its `InstallerSha256` is only known then. From the first release named Inlay, the folder holds `AkshitBansal.Inlay.*` files with `PackageName: Inlay`, and `submit.sh` submits it as a new package. Once it is in, the old package can be retired by a pull request to winget-pkgs that removes `AkshitBansal.Deskbeat`.
 
 ## Submitting
 
 ```bash
-winget validate --manifest packaging/winget/1.0.0
-bash packaging/winget/submit.sh 1.0.0
+winget validate --manifest packaging/winget/2.0.0
+bash packaging/winget/submit.sh 2.0.0
 ```
 
 `submit.sh` forks `winget-pkgs` if there is no fork yet, writes the three files to a branch of it through the GitHub API, and opens the pull request with `gh`. Nothing is cloned. Microsoft's `wingetcreate` does the same job and is not used here, because it needs the .NET runtime.

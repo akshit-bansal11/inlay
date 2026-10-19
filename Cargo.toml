@@ -5,11 +5,11 @@ members = ["crates/core", "crates/app", "crates/desk"]
 default-members = ["crates/core", "crates/app"]
 
 [workspace.package]
-version = "2.0.0"
+version = "2.1.0"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT"
-repository = "https://github.com/akshit-bansal11/deskbeat"
+repository = "https://github.com/akshit-bansal11/inlay"
 
 [workspace.dependencies]
 inlay-core = { path = "crates/core" }

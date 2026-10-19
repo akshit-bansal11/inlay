@@ -6,6 +6,56 @@ uses [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-20
+
+### Added
+
+- A **preview for macOS and Linux** (`crates/desk`): the same four widgets,
+  reading the same `config.toml` format. Spotify is read through AppleScript
+  on macOS and MPRIS on Linux; the visualizer listens to the system's default
+  input; a tray or menu-bar icon offers Open config file, Open fonts folder
+  and Quit. Not yet tried on real machines beyond CI. Not in the preview: the
+  settings panel, edit-layout dragging, hotkeys, start at login.
+  Downloads are `Inlay-<version>-macos.zip` and
+  `Inlay-<version>-linux-x86_64.tar.gz`.
+- The Windows exe now carries version information.
+
+### Changed
+
+- Word-by-word timing is **off by default** (`word_sync = false`, a switch in
+  settings). Turn it on to ask the community-run LyricsPlus servers; Inlay
+  does not host or check them. With it off, the lyrics widget wakes at each
+  new line instead of redrawing every frame.
+- Lyrics servers must use `https://`; others are refused.
+- Settings open on the first run.
+- The README, SECURITY.md, CONTRIBUTING.md and the architecture notes are
+  corrected and updated. Widgets are described as sitting on the desktop under
+  your windows and drawing over the desktop icons, not behind them. The
+  memory figure is described as measured once, method not recorded. The
+  tested section no longer calls the settings panel, the colour picker, edit
+  layout, word fill, the transport buttons, Win+D or the settings carry-over
+  tested by automated tests.
+- The repository is now https://github.com/akshit-bansal11/inlay and the
+  website https://inlay.akshitbansal.dev. Files of 2.0.0 and earlier are
+  attested under `akshit-bansal11/deskbeat`; 2.1.0 and later under
+  `akshit-bansal11/inlay`.
+
+### Fixed
+
+- Programs the app starts are no longer named bare, so the system cannot
+  resolve them from an unexpected place.
+- Album art over 4096 pixels a side is refused.
+- A capture handle that was not closed is closed.
+- Claims in the documentation that the app did not back up were corrected,
+  including the architecture notes on which thread computes the spectrum.
+
+### Security
+
+- Start with Windows uses the registry API instead of running `reg.exe`.
+- The repository link opens through the system's handler instead of
+  `explorer.exe`.
+- Notepad is started by its full path.
+
 ## [2.0.0] - 2026-10-17
 
 Deskbeat is now **Inlay**. To upgrade, quit Deskbeat from its tray menu and
@@ -14,7 +64,7 @@ come with it, and the old `Deskbeat-*.exe` can be deleted.
 
 ### Changed
 
-- The website moved to https://deskbeat.akshitbansal.dev.
+- The website moved to https://inlay.akshitbansal.dev.
 - **Deskbeat is now Inlay.** The exe is `inlay.exe`, released as
   `Inlay-<version>.exe`. The settings, fonts and lyrics cache move from
   `%APPDATA%\deskbeat` and `%LOCALAPPDATA%\deskbeat` (or the older
@@ -283,7 +333,13 @@ First build. A pre-release: see "Not yet verified" below before relying on it.
 - Staying visible through Show Desktop (Win+D) is untested.
 - The exe is unsigned, so Windows SmartScreen warns on first launch.
 
-[Unreleased]: https://github.com/akshit-bansal11/deskbeat/compare/v1.0.1...HEAD
-[1.0.1]: https://github.com/akshit-bansal11/deskbeat/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/akshit-bansal11/deskbeat/compare/v0.1.0...v1.0.0
-[0.1.0]: https://github.com/akshit-bansal11/deskbeat/releases/tag/v0.1.0
+[Unreleased]: https://github.com/akshit-bansal11/inlay/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v2.1.0
+[2.0.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v2.0.0
+[1.4.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v1.4.0
+[1.3.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v1.3.0
+[1.2.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v1.2.0
+[1.1.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v1.1.0
+[1.0.1]: https://github.com/akshit-bansal11/inlay/releases/tag/v1.0.1
+[1.0.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v1.0.0
+[0.1.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v0.1.0
