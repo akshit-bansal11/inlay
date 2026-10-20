@@ -20,8 +20,10 @@ crates/core   pure logic, no Windows types, unit tested anywhere
 crates/app    the exe
   UI thread       message loop, windows, Direct2D drawing, settings panel
   media thread    Windows media session events for Spotify
-  capture thread  WASAPI loopback, FFT, bands
+  capture thread  WASAPI loopback; hands samples to the UI thread
   lyrics thread   one short-lived thread per track
+
+crates/desk   the macOS and Linux preview (egui), see below
 ```
 
 ## The split
@@ -33,15 +35,15 @@ crates/app    the exe
 ## Where the data comes from
 
 - **Track, position, art and transport** come from the Windows media session API (GSMTC), filtered to Spotify's session. There is no Spotify Web API, no client ID and no OAuth, so it works on free accounts and needs no setup.
-- **Audio** comes from WASAPI process loopback on Spotify's process tree, so the visualizer moves to Spotify and not to a game or a call. System loopback is a setting for when that is wanted.
-- **Lyrics** come from two places. LRCLIB answers first, with the time each line starts. A LyricsPlus server, when it has the track, then replaces that with the time each syllable is sung. Both answers are cached on disk; a miss is remembered for a week. A server that is down is not remembered as a miss.
+- **Audio** comes from WASAPI process loopback on Spotify's process tree: the capture thread keeps the newest samples, and the visualizer widget runs the FFT and maps it to bands on the UI thread (`crates/app/src/widgets/visualizer.rs`). So the visualizer moves to Spotify and not to a game or a call. System loopback is a setting for when that is wanted.
+- **Lyrics** come from two places. LRCLIB answers first, with the time each line starts. When word timing is on (off by default), a LyricsPlus server, if it has the track, then replaces that with the time each syllable is sung. Both answers are cached on disk; a miss is remembered for a week. A server that is down is not remembered as a miss.
 
 ## The loop
 
 One thread owns every window. Each pass it drains the message queue, ticks each widget, and draws the ones that said they changed. A widget's tick returns what it wants next:
 
 - `Idle`: nothing until an event arrives.
-- `After(duration)`: wake me then. The clock asks for the next minute, the lyrics for the next line or word boundary, the player for the next second.
+- `After(duration)`: wake me then. The clock asks for the next minute, the lyrics for the next line (with word timing on, every frame while a line is being sung), the player for the next second.
 - `Frame`: something is moving. The loop waits on the compositor's vblank and comes back.
 
 The most impatient answer wins. When every widget is idle the thread blocks on the message queue and uses no CPU. `Frame` is reserved for motion that is actually on screen: a scroll between lyric lines, a word filling in, the visualizer while there is sound. Returning it otherwise is the bug this project exists to not have.
@@ -50,7 +52,7 @@ Other threads never touch a window. They write to shared state and post a messag
 
 ## Drawing
 
-Each widget is its own layered, click-through, no-activate tool window with a DirectComposition swap chain, drawn with Direct2D and DirectWrite through one shared device. Widgets sit at the bottom of the window stack, above the desktop and under every app. A widget under a maximized or fullscreen window is not drawn.
+Each widget is its own layered, click-through, no-activate tool window with a DirectComposition swap chain, drawn with Direct2D and DirectWrite through one shared device. Widgets sit at the bottom of the window stack, on the desktop under every app; they draw over the desktop icons rather than behind them. A widget under a maximized or fullscreen window is not drawn.
 
 The clock and the player have no box. Each of their elements has its own position, and the window is wrapped around whatever was drawn. In edit mode that window covers the work area instead and does not move, so dragging one element cannot disturb the others; the space between elements passes clicks through. The lyrics and the visualizer keep a frame, because it is what sizes them.
 
@@ -79,3 +81,15 @@ The settings panel is an ordinary window drawn by the app itself, immediate-mode
 There is one gate, `scripts/check.ps1`: format, clippy with warnings as errors, tests. CI runs it non-mutating on every push and pull request, then builds the exe and renders the snapshots.
 
 Pushing a `v*` tag runs the release workflow: the gate again, a release build, a check that the tag matches the crate version, the snapshot smoke test, then a GitHub Release carrying `Inlay-<version>.exe`, `SHA256SUMS.txt` and a build provenance attestation, with notes taken from that version's section of `CHANGELOG.md`. Running the same workflow by hand attaches the build to a private draft release instead.
+
+## crates/desk
+
+The macOS and Linux preview. It reads the same `config.toml` and uses `inlay-core` for lyric parsing, timing, the sync clock, band mapping and config.
+
+- **Windows.** One egui viewport (eframe) per widget.
+- **Media thread.** Reads Spotify and sends the transport commands: AppleScript on macOS, MPRIS on Linux.
+- **Audio.** cpal listens to the system's default input; the samples go through the FFT into bands, as on Windows.
+- **Lyrics.** `ureq` requests, with the same cache format as the Windows app. Album art is downloaded from the https address Spotify gives.
+- **Tray.** A tray or menu-bar icon with Open config file, Open fonts folder and Quit.
+
+Not in the preview: the settings panel, edit-layout dragging, hotkeys, start at login. CI builds and checks it; it has not been tried on real machines beyond that.

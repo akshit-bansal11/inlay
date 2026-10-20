@@ -2,7 +2,7 @@
 
 Two routes: a landing page at `/`, and the whole documentation on one page at `/docs`.
 
-**Live at [deskbeat.akshitbansal.dev](https://deskbeat.akshitbansal.dev).** The domain keeps the old name, Deskbeat, until it is moved. Deployed to Vercel from the repository root; see *Hosting* below.
+**Live at [inlay.akshitbansal.dev](https://inlay.akshitbansal.dev).** Deployed to Vercel from the repository root; see *Hosting* below.
 
 It is **not** part of the app's quality gate: `scripts/check.ps1` checks only the Rust workspace. The site's own gate and build run in `.github/workflows/site.yml` on every push and pull request that touches `site/`.
 
@@ -128,7 +128,7 @@ The tables on `/docs` are typed by hand from those files, not generated from the
 
 ## Hosting
 
-Live at [deskbeat.akshitbansal.dev](https://deskbeat.akshitbansal.dev), on Vercel, in a project named `deskbeat`. Both keep the old name until the owner moves them. `cleanUrls` in the root `vercel.json` is what makes `/docs` serve `docs.html` from the export.
+Live at [inlay.akshitbansal.dev](https://inlay.akshitbansal.dev), on Vercel. The Vercel project's name was not rechecked and may still say `deskbeat`. `cleanUrls` in the root `vercel.json` is what makes `/docs` serve `docs.html` from the export.
 
 The site is a **static export** (`output: "export"` in `next.config.ts`): every page is prerendered and nothing is read at request time, so it ships as plain files with no Next.js runtime and no serverless functions.
 

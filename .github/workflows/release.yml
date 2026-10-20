@@ -1,10 +1,12 @@
 name: Release
 
-# Push a tag such as v1.0.1 to publish. The quality gate passes, then the exe is attached to a GitHub
-# Release named for the version, Inlay-1.0.1.exe, so several downloads on one PC can be told apart.
+# Push a tag such as v1.0.1 to publish. The quality gate passes on every platform, then the release carries
+# the Windows exe (Inlay-1.0.1.exe), a macOS zip holding Inlay.app (Inlay-1.0.1-macos.zip), a Linux tar.gz
+# (Inlay-1.0.1-linux-x86_64.tar.gz), SHA256SUMS.txt and a build provenance attestation, all named for the
+# version so several downloads on one PC can be told apart. The macOS and Linux files are previews.
 #
-# Running this by hand instead builds the same file from whatever the branch currently holds and attaches
-# it to a DRAFT release. A draft is visible only to accounts with push access to the repo, and GitHub does
+# Running this by hand instead builds the same files from whatever the branch currently holds and attaches
+# them to a DRAFT release. A draft is visible only to accounts with push access to the repo, and GitHub does
 # not create its git tag until it is published, so nothing about it reaches the public: no tag, no entry
 # on the releases page, and releases/latest keeps pointing at the last real release. That is how a build
 # gets onto the owner's own PC for testing without announcing a version.
@@ -12,8 +14,9 @@ name: Release
 # Every `uses:` is pinned to a commit SHA with its tag in a trailing comment, and Dependabot moves the
 # SHA the same way it would move a tag. Rust comes from the runner image through rustup, not an action.
 #
-# There is no signing key and no secret in this workflow, so there is no environment gating it: the only
-# credential is the job's own token, which can write releases to this repository and nothing else.
+# There is no signing key and no secret in this workflow, so there is no environment gating it. The build
+# jobs only read the repository and run cargo. Only `publish` can write, and it runs no cargo: it handles
+# the finished files and nothing else, so a build script or dependency never sees a token that can write.
 #
 # Each release also carries SHA256SUMS.txt and a build provenance attestation, which `gh attestation verify`
 # checks: proof that the file was built by this workflow from this repository at that tag.
@@ -31,28 +34,19 @@ permissions:
   contents: read
 
 jobs:
-  release:
-    runs-on: windows-latest
-    timeout-minutes: 30
-    permissions:
-      contents: write
-      # Both for the provenance attestation: a token to prove which workflow ran, and the right to store it.
-      id-token: write
-      attestations: write
+  # The exe reports the crate version, so a tag that disagrees with it would publish a lie. A hand-run
+  # draft has no tag: it is named for the crate version plus the run number.
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy --no-self-update
-
-      # The release is built only from a commit that passes the full gate.
-      - name: Quality gate
-        run: pwsh scripts/check.ps1 -Ci
-      - run: cargo build --release --locked
-
-      # The exe reports the crate version, so a tag that disagrees with it would publish a lie. A hand-run
-      # draft has no tag: it is named for the crate version plus the run number.
       - name: Work out the version
+        id: version
         shell: pwsh
         run: |
           $crate = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages |
@@ -64,7 +58,26 @@ jobs:
           } else {
             $version = "$crate-draft.$env:GITHUB_RUN_NUMBER"
           }
-          "VERSION=$version" >> $env:GITHUB_ENV
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy --no-self-update
+
+      # The release is built only from a commit that passes the full gate.
+      - name: Quality gate
+        run: pwsh scripts/check.ps1 -Ci
+      - run: cargo build --release --locked
 
       # The same smoke test CI runs: every widget draws without a GPU or Spotify.
       - name: Render snapshots
@@ -73,27 +86,143 @@ jobs:
           $run = Start-Process -FilePath target/release/inlay.exe -ArgumentList '--snapshot', 'snapshots' -Wait -PassThru -NoNewWindow
           if ($run.ExitCode -ne 0) { throw "snapshot exited with $($run.ExitCode)" }
 
-      # The sums are taken after the rename, so SHA256SUMS.txt names the file exactly as it is downloaded.
       - name: Name the file for the version
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item target/release/inlay.exe "dist/Inlay-$env:VERSION.exe"
-          # LF endings: with CRLF, `sha256sum -c` reads the carriage return as
-          # part of the file name and reports the file missing.
-          $sums = Get-ChildItem dist -Filter *.exe | ForEach-Object {
-            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
-          }
-          [IO.File]::WriteAllText("$PWD/dist/SHA256SUMS.txt", ($sums -join "`n") + "`n")
-          Get-Content dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dist-windows
+          path: dist/*
+          retention-days: 1
+          if-no-files-found: error
+
+  macos:
+    needs: version
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy --no-self-update
+      - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - run: cargo fmt --all --check
+      - run: cargo clippy -p inlay-core -p inlay-desk --all-targets --locked -- -D warnings
+      - run: cargo test -p inlay-core -p inlay-desk --locked
+      - run: cargo build -p inlay-desk --release --locked --target aarch64-apple-darwin
+      - run: cargo build -p inlay-desk --release --locked --target x86_64-apple-darwin
+
+      # One universal binary inside a minimal app bundle. LSUIElement keeps it out of the Dock, because it
+      # lives in the menu bar. The usage string is what macOS shows when it asks to let Inlay control Spotify.
+      # The plist is written with printf, not a heredoc, so the block's YAML indentation never reaches it.
+      - name: Make the app bundle
+        run: |
+          app=Inlay.app
+          mkdir -p "$app/Contents/MacOS"
+          lipo -create -output "$app/Contents/MacOS/inlay" \
+            target/aarch64-apple-darwin/release/inlay-desk target/x86_64-apple-darwin/release/inlay-desk
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="UTF-8"?>' \
+            '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+            '<plist version="1.0">' \
+            '<dict>' \
+            '  <key>CFBundleExecutable</key><string>inlay</string>' \
+            '  <key>CFBundleIdentifier</key><string>dev.akshitbansal.inlay</string>' \
+            '  <key>CFBundleName</key><string>Inlay</string>' \
+            '  <key>CFBundlePackageType</key><string>APPL</string>' \
+            "  <key>CFBundleShortVersionString</key><string>${VERSION%%-*}</string>" \
+            "  <key>CFBundleVersion</key><string>${VERSION%%-*}</string>" \
+            '  <key>LSMinimumSystemVersion</key><string>11.0</string>' \
+            '  <key>LSUIElement</key><true/>' \
+            '  <key>NSAppleEventsUsageDescription</key><string>Inlay reads what Spotify is playing and controls playback.</string>' \
+            '  <key>NSMicrophoneUsageDescription</key><string>The visualizer listens to the input you choose, such as a loopback device, while Spotify plays.</string>' \
+            '</dict>' \
+            '</plist>' > "$app/Contents/Info.plist"
+          # Ad-hoc signature: Apple silicon will not run an unsigned app at all. Not notarized.
+          codesign --force --deep --sign - "$app"
+          mkdir -p dist
+          ditto -c -k --keepParent "$app" "dist/Inlay-$VERSION-macos.zip"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dist-macos
+          path: dist/*
+          retention-days: 1
+          if-no-files-found: error
+
+  linux:
+    needs: version
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libdbus-1-dev libxkbcommon-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev pkg-config
+      - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy --no-self-update
+      - run: cargo fmt --all --check
+      - run: cargo clippy -p inlay-core -p inlay-desk --all-targets --locked -- -D warnings
+      - run: cargo test -p inlay-core -p inlay-desk --locked
+      - run: cargo build -p inlay-desk --release --locked
+      - name: Pack the tarball
+        run: |
+          dir="inlay-$VERSION"
+          mkdir -p "$dir" dist
+          cp target/release/inlay-desk "$dir/inlay"
+          cp README.md LICENSE "$dir/"
+          tar -czf "dist/Inlay-$VERSION-linux-x86_64.tar.gz" "$dir"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dist-linux
+          path: dist/*
+          retention-days: 1
+          if-no-files-found: error
+
+  # The only job that can write, and it runs no cargo: it gathers the finished files, sums them, and
+  # publishes.
+  publish:
+    needs: [version, windows, macos, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      # Both for the provenance attestation: a token to prove which workflow ran, and the right to store it.
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      # Only for CHANGELOG.md.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
+
+      # The sums are taken after the rename, so SHA256SUMS.txt names each file exactly as it is downloaded.
+      - name: Sum the files
+        run: cd dist && sha256sum Inlay-* > SHA256SUMS.txt && cat SHA256SUMS.txt
 
       # Tagged releases only. An attestation of a public repository is written to Sigstore's public
       # transparency log, which would announce a draft build that is meant to stay private.
-      - name: Attest where the file was built
+      - name: Attest where the files were built
         if: github.event_name == 'push'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
         with:
-          subject-path: 'dist/Inlay-*.exe'
+          subject-path: 'dist/Inlay-*'
 
       # A tagged run takes that version's section of CHANGELOG.md; a hand-run draft takes Unreleased,
       # because a draft is a build of work in progress and has no section of its own yet.
@@ -112,30 +241,26 @@ jobs:
 
       - name: Publish the release
         if: github.event_name == 'push'
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create $env:GITHUB_REF_NAME "dist/Inlay-$env:VERSION.exe" dist/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --title "Inlay $env:GITHUB_REF_NAME" --notes-file notes.md --verify-tag
-          if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Inlay $GITHUB_REF_NAME" --notes-file notes.md --verify-tag
 
       # --draft is what keeps this private, and the run number is what keeps two test builds from
       # colliding on a name: deleting a release is an owner action, so a job must never need one deleted
       # to succeed. --target pins the draft to this commit; the tag is only cut if it is ever published.
       - name: Attach the draft build
         if: github.event_name == 'workflow_dispatch'
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           NAME: ${{ inputs.label }}-${{ github.run_number }}
         run: |
-          gh release create $env:NAME "dist/Inlay-$env:VERSION.exe" dist/SHA256SUMS.txt --repo $env:GITHUB_REPOSITORY --title "Inlay $env:NAME" --notes-file notes.md --draft --target $env:GITHUB_SHA
-          if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
-          @(
-            "Draft build **$env:NAME**, visible only to accounts with push access to this repo."
-            ''
-            'Download the file, with its SHA256SUMS.txt:'
-            '```'
-            "gh release download $env:NAME --repo $env:GITHUB_REPOSITORY --dir ."
-            '```'
-          ) -join "`n" >> $env:GITHUB_STEP_SUMMARY
+          gh release create "$NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Inlay $NAME" --notes-file notes.md --draft --target "$GITHUB_SHA"
+          {
+            echo "Draft build **$NAME**, visible only to accounts with push access to this repo."
+            echo
+            echo 'Download the files, with their SHA256SUMS.txt:'
+            echo '```'
+            echo "gh release download $NAME --repo $GITHUB_REPOSITORY --dir ."
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

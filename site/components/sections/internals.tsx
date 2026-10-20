@@ -28,7 +28,7 @@ const SOURCES: { what: string; from: string; detail: string }[] = [
     what: "Lyrics",
     from: "LRCLIB, then a LyricsPlus server",
     detail:
-      "LRCLIB answers first, with the time each line starts. A LyricsPlus server, when it has the track, then replaces that with the time each syllable is sung.",
+      "LRCLIB answers first, with the time each line starts. With word timing on (off by default for new installs; an existing config keeps its setting), a LyricsPlus server, when it has the track, then replaces that with the time each syllable is sung.",
   },
 ];
 
@@ -37,12 +37,12 @@ const WAKES: { answer: string; means: string }[] = [
   {
     answer: "After(duration)",
     means:
-      "Wake me then. The clock asks for the next minute, the lyrics for the next line or word boundary, the player for the next second.",
+      "Wake me then. The clock asks for the next minute, the lyrics for each new line, the player for the next second.",
   },
   {
     answer: "Frame",
     means:
-      "Something is moving. The loop waits on the compositor's vblank and comes back.",
+      "Something is moving. The loop waits on the compositor's vblank and comes back. With word timing on, the lyrics ask for this every frame while a line is sung.",
   },
 ];
 
@@ -65,7 +65,7 @@ const MODEL: { title: string; body: React.ReactNode }[] = [
   },
   {
     title: "The LyricsPlus servers are community-run mirrors",
-    body: "They are not a service with a contract. Whoever runs one sees the requests above, and your IP address as any web server does. The list is yours to edit or empty.",
+    body: "They are not a service with a contract. They serve lyrics from other services (one answered from Apple Music's catalog when checked); Inlay does not host or check them, and only https servers are accepted. Whoever runs one sees the requests above, and your IP address as any web server does. The list is yours to edit or empty.",
   },
   {
     title: "Audio never leaves the process",
@@ -135,7 +135,7 @@ export function InternalsSections() {
           <>
             Line timing comes from{" "}
             <ExternalLink href="https://lrclib.net">LRCLIB</ExternalLink>. Word timing
-            comes from community-run LyricsPlus servers.
+            is off by default and comes from community-run LyricsPlus servers.
           </>
         }
       >
@@ -165,10 +165,13 @@ export function InternalsSections() {
         <Sub>The servers</Sub>
         <P>
           The servers asked for word timing are <C>word_servers</C> under{" "}
-          <C>[lyrics]</C>, tried in order. They are mirrors run by volunteers, and they
-          come and go, which is why the list is a setting and not only a constant in the
-          code. When none answers, lyrics fall back to line timing from LRCLIB.{" "}
-          <C>word_sync = false</C> turns the extra lookup off.
+          <C>[lyrics]</C>, tried in order, and only when word timing is on (the settings
+          switch, or <C>word_sync = true</C>); it is off by default for new installs.
+          Only https servers are accepted. They are community-run mirrors serving lyrics
+          from other services (one answered from Apple Music&apos;s catalog when
+          checked); Inlay does not host or check them. They come and go, which is why
+          the list is a setting and not only a constant in the code. When none answers,
+          or with word timing off, lyrics use line timing from LRCLIB.
         </P>
 
         <Sub>Keeping lyrics in time</Sub>

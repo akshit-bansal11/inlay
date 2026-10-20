@@ -107,9 +107,9 @@ export function DevelopingSections() {
       >
         <CodeBlock
           title="Clone your fork"
-          code={`git clone https://github.com/<you>/deskbeat.git inlay
+          code={`git clone https://github.com/<you>/inlay.git inlay
 cd inlay
-git remote add upstream https://github.com/akshit-bansal11/deskbeat.git`}
+git remote add upstream https://github.com/akshit-bansal11/inlay.git`}
           caption="The upstream remote is there to pull in later changes."
         />
         <Table>
@@ -149,10 +149,19 @@ git remote add upstream https://github.com/akshit-bansal11/deskbeat.git`}
         lede={<>What a machine needs before the app will build.</>}
       >
         <ul className="text-dim max-w-[68ch] list-disc space-y-2 pl-5 text-[0.9375rem] leading-relaxed">
-          <li>Windows 11.</li>
+          <li>
+            Windows 11 for the Windows app, or macOS or Linux for the preview in{" "}
+            <C>crates/desk</C>.
+          </li>
           <li>
             The stable Rust toolchain, 1.89 or later, with <C>rustfmt</C> and{" "}
-            <C>clippy</C>, and the MSVC build tools that <C>rustup</C> asks for.
+            <C>clippy</C>, and the MSVC build tools that <C>rustup</C> asks for on
+            Windows.
+          </li>
+          <li>
+            On Linux, the packages <C>libasound2-dev</C>, <C>libdbus-1-dev</C>,{" "}
+            <C>libxkbcommon-dev</C> and <C>pkg-config</C>, and the xcb development
+            packages.
           </li>
           <li>
             PowerShell 7 (<C>pwsh</C>), which runs the gate.
@@ -211,6 +220,10 @@ pwsh scripts/check.ps1 -Ci    # what CI runs: fails on unformatted code instead 
           title="The tray app"
           code="cargo run --release"
           caption="Only one copy runs at a time. If a release build is already in your tray, quit it first, or the new one hands over to it and exits."
+        />
+        <CodeBlock
+          title="The macOS and Linux preview"
+          code="cargo run -p inlay-desk --release"
         />
         <CodeBlock
           title="Every widget, drawn to PNG"

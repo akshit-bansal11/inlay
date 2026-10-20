@@ -1,0 +1,30 @@
+#include <winver.h>
+
+1 VERSIONINFO
+FILEVERSION VER_MAJOR,VER_MINOR,VER_PATCH,0
+PRODUCTVERSION VER_MAJOR,VER_MINOR,VER_PATCH,0
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "CompanyName", "Akshit Bansal"
+      VALUE "FileDescription", "Inlay desktop widgets"
+      VALUE "FileVersion", VER_STRING
+      VALUE "InternalName", "inlay"
+      VALUE "LegalCopyright", "Copyright (c) 2026 Akshit Bansal. MIT License."
+      VALUE "OriginalFilename", "inlay.exe"
+      VALUE "ProductName", "Inlay"
+      VALUE "ProductVersion", VER_STRING
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

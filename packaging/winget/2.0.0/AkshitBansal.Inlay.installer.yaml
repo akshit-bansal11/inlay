@@ -9,7 +9,7 @@ Commands:
 ReleaseDate: 2026-10-17
 Installers:
 - Architecture: x64
-  InstallerUrl: https://github.com/akshit-bansal11/deskbeat/releases/download/v2.0.0/Inlay-2.0.0.exe
-  InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+  InstallerUrl: https://github.com/akshit-bansal11/inlay/releases/download/v2.0.0/Inlay-2.0.0.exe
+  InstallerSha256: ffd3a123b74bfa5079fdb7842072ddf115fae87c75d4ca82823102eaab41495d
 ManifestType: installer
 ManifestVersion: 1.12.0

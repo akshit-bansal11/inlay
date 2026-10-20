@@ -35,7 +35,7 @@ done
 # the licence agreement are left open: the first two were not run by the script, and the third is signed
 # on the pull request itself. Tick validation by hand once `winget validate` has passed.
 gh pr create --repo microsoft/winget-pkgs --base master --head "$user:$branch" --title "$title" --body "## Description
-Adds $id $version: https://github.com/akshit-bansal11/deskbeat
+Adds $id $version: https://github.com/akshit-bansal11/inlay
 
 ## Checklist
 - [ ] Signed the Contributor License Agreement

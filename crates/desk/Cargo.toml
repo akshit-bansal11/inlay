@@ -1,0 +1,40 @@
+[package]
+name = "inlay-desk"
+description = "Inlay's widgets on macOS and Linux: a clock, synced lyrics, a player and a visualizer."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Not "inlay": the Windows crate's binary has that name, and one workspace build may not
+# produce two files of the same name. The release names the file inlay.
+[[bin]]
+name = "inlay-desk"
+path = "src/main.rs"
+
+# Everything is for macOS and Linux; on Windows the binary is a stub (see main.rs).
+[target.'cfg(not(windows))'.dependencies]
+inlay-core.workspace = true
+rustfft.workspace = true
+serde_json.workspace = true
+chrono = "=0.4.45"
+dirs = "=7.0.0"
+# glow: the GL renderer, lighter than wgpu. x11 and wayland: one binary for both Linux
+# sessions. No persistence (config.toml is the only state) and no accesskit.
+eframe = { version = "=0.36.2", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
+cpal = "=0.18.2"
+fontdb = "=0.24.0"
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
+ureq = "=3.4.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tray-icon = "=0.26.0"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# The KSNI backend talks D-Bus itself: no GTK main loop to run beside the window.
+tray-icon = { version = "=0.26.0", default-features = false, features = ["ksni"] }
+mpris = "=2.1.0"
+
+[lints]
+workspace = true

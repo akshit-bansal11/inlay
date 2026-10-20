@@ -330,7 +330,14 @@ pub fn decode_image(encoded: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
         )?;
         let (mut w, mut h) = (0, 0);
         converter.GetSize(&mut w, &mut h)?;
-        let mut pixels = vec![0u8; (w * h * 4) as usize];
+        // Album art is drawn small; a huge or bogus size is refused rather than allocated.
+        const MAX_SIDE: u32 = 4096;
+        if w == 0 || h == 0 || w > MAX_SIDE || h > MAX_SIDE {
+            return Err(windows::core::Error::from(
+                windows::Win32::Foundation::E_FAIL,
+            ));
+        }
+        let mut pixels = vec![0u8; (w as usize) * (h as usize) * 4];
         converter.CopyPixels(std::ptr::null(), w * 4, &mut pixels)?;
         Ok((w, h, pixels))
     }

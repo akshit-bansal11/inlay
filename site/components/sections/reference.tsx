@@ -44,7 +44,7 @@ const DECISIONS: { id: string; question: string; answer: string }[] = [
     id: "servers",
     question: "Why is the list of word-timing servers a setting?",
     answer:
-      "The LyricsPlus servers are community-run mirrors of the same service, and they come and go. A list in the config can be edited, or emptied, without a new release.",
+      "The LyricsPlus servers are community-run mirrors that serve lyrics from other services, and they come and go. A list in the config can be edited, or emptied, without a new release.",
   },
   {
     id: "windows-crate",
@@ -65,7 +65,11 @@ const KIND_VARIANT: Record<Kind, "solid" | "outline"> = {
 const LIMITS: { kind: Kind; text: string }[] = [
   {
     kind: "accepted",
-    text: "It needs Windows 11. The visualizer, lyrics and player need the Spotify desktop app playing on the same PC; playback sent to another device through Spotify Connect is not seen.",
+    text: "The full app needs Windows 11. The visualizer, lyrics and player need the Spotify desktop app playing on the same PC; playback sent to another device through Spotify Connect is not seen.",
+  },
+  {
+    kind: "unverified",
+    text: "The macOS and Linux preview (2.1.0) has not been tried on real machines beyond CI. It has no settings panel, edit layout, hotkeys, start at login, vertical text or letter spacing; Wayland may ignore window positions, and GNOME cannot keep widgets below windows.",
   },
   {
     kind: "accepted",
@@ -73,11 +77,11 @@ const LIMITS: { kind: Kind; text: string }[] = [
   },
   {
     kind: "accepted",
-    text: "Word timing depends on community-run LyricsPlus servers. When none answers, lyrics fall back to line timing from LRCLIB.",
+    text: "Word timing is off by default for new installs (an existing config keeps its word_sync value). It depends on community-run LyricsPlus servers that Inlay does not host or check; with it off, or when none answers, lyrics use line timing from LRCLIB.",
   },
   {
     kind: "accepted",
-    text: "Memory use measured about 54 MB, above the 40 MB this was aiming for.",
+    text: "Memory use was measured once at about 54 MB; how it was measured was not recorded.",
   },
   {
     kind: "unverified",
@@ -105,6 +109,36 @@ const TESTED: string[] = [
 
 // Summaries of CHANGELOG.md, one per section, in its order.
 const HISTORY: { version: string; date: string; summary: string }[] = [
+  {
+    version: "2.1.0",
+    date: "2026-10-20",
+    summary:
+      "A preview for macOS and Linux: the same four widgets, reading the same config.toml format, with Spotify read through AppleScript or MPRIS and a tray or menu-bar icon; not yet tried on real machines beyond CI, and without the settings panel, edit layout, hotkeys or start at login. The Windows exe carries version information. Word-by-word timing is off by default for new installs, with a switch in settings; in complete mode the lyrics widget then wakes at each new line instead of redrawing every frame. On macOS and Linux the visualizer listens only while Spotify plays. Lyrics servers must use https. Programs the app starts are no longer named bare. The repository is now akshit-bansal11/inlay and the website inlay.akshitbansal.dev.",
+  },
+  {
+    version: "2.0.0",
+    date: "2026-10-17",
+    summary:
+      "Deskbeat is now Inlay. The exe is inlay.exe, released as Inlay-<version>.exe; settings, fonts, the lyrics cache and the start-with-Windows entry move over on the first run. A new mark of four flat pieces, one for each widget, in a new palette. The website moved to inlay.akshitbansal.dev, and the README, the website and the other documents describe Inlay as a desktop widget app rather than a Spotify add-on.",
+  },
+  {
+    version: "1.4.0",
+    date: "2026-10-10",
+    summary:
+      "Widgets scale with the height of the screen, so a layout made on a big monitor keeps its proportions on a laptop. A dragged widget is measured from the edge, corner or middle of the screen it sits nearest. Widgets left off the edge after the screen changed are kept on the screen again.",
+  },
+  {
+    version: "1.3.0",
+    date: "2026-10-04",
+    summary:
+      "The exe has an icon. The visualizer gained bar width and bar gap in pixels, a quarter-turn rotation, an Across slider and a switch for dots at rest. Word by word lights one word at a time. The position sliders of the lyrics and the visualizer place their middle.",
+  },
+  {
+    version: "1.2.0",
+    date: "2026-10-04",
+    summary:
+      "Lyrics have two modes: what is being sung lights up at once, or fills from its start to its end. Sliders for where each element sits, with a notch at every quarter of the screen. The player can show the name of the song alone. The settings panel is reorganised into a sidebar of five pages. Lyrics are only followed word by word with times a server gave. Word timing no longer goes missing for many songs.",
+  },
   {
     version: "1.1.0",
     date: "2026-10-04",
@@ -166,8 +200,8 @@ export function ReferenceSections() {
         title="Known limits"
         lede={
           <>
-            What Inlay does not do, and what has been checked only by automated tests
-            and rendered snapshots, not by hand.
+            What Inlay does not do, and what no automated test checks and nobody has
+            checked by hand.
           </>
         }
       >
@@ -186,9 +220,9 @@ export function ReferenceSections() {
         </ul>
         <Note label="What the two labels mean">
           <strong className="text-foreground">accepted</strong> is a cost of how Inlay
-          is built today. <strong className="text-foreground">unverified</strong> is
-          covered by automated tests and rendered snapshots but has not been checked by
-          hand on a real desktop.
+          is built today. <strong className="text-foreground">unverified</strong> is not
+          checked by automated tests, though some of it is drawn in CI snapshots, and
+          has not been checked by hand.
         </Note>
 
         <Sub>Tested on a real Windows 11 desktop</Sub>
