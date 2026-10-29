@@ -67,11 +67,21 @@ const CARD: Rgba = [0.11, 0.11, 0.125, 1.0];
 const SIDE: Rgba = [0.055, 0.055, 0.065, 1.0];
 const HAIRLINE: Rgba = [BONE[0], BONE[1], BONE[2], 0.07];
 
-pub const TABS: [&str; 5] = ["General", "Clock", "Player", "Lyrics", "Visualizer"];
-/// Segoe Fluent Icons for the sidebar: settings, clock, music, text, chart.
-const TAB_ICONS: [&str; 5] = ["\u{E713}", "\u{E823}", "\u{E8D6}", "\u{E8D2}", "\u{E9D9}"];
+pub const TABS: [&str; 6] = [
+    "General",
+    "Clock",
+    "Player",
+    "Lyrics",
+    "Visualizer",
+    "System",
+];
+/// Segoe Fluent Icons for the sidebar: settings, clock, music, text, chart,
+/// computer.
+const TAB_ICONS: [&str; 6] = [
+    "\u{E713}", "\u{E823}", "\u{E8D6}", "\u{E8D2}", "\u{E9D9}", "\u{E7F4}",
+];
 /// The parts of each tab's page. Each is one screenful, more or less.
-const SECTIONS: [&[&str]; 5] = [
+const SECTIONS: [&[&str]; 6] = [
     &["Appearance", "Behaviour", "App"],
     &["Widget", "Day", "Time", "Date"],
     &[
@@ -79,6 +89,7 @@ const SECTIONS: [&[&str]; 5] = [
     ],
     &["Widget", "Text", "Colours", "Timing"],
     &["Widget", "Bars", "Colour", "Motion"],
+    &["Widget", "Readings", "Meter", "Text", "Network", "Position"],
 ];
 const SWATCHES: [&str; 10] = [
     "#FFFFFF", "#1ED760", "#7C5CFF", "#21D4FD", "#FF3DCB", "#FF6B6B", "#FFB547", "#F9F871",
@@ -219,7 +230,7 @@ pub struct View {
     picker: Picker,
     tab: usize,
     /// The section each tab is showing.
-    section: [usize; 5],
+    section: [usize; 6],
     scroll: f32,
     /// How far the current tab can scroll, as of the last paint.
     max_scroll: f32,
@@ -236,7 +247,7 @@ impl Default for View {
     fn default() -> Self {
         Self {
             tab: 0,
-            section: [0; 5],
+            section: [0; 6],
             scroll: 0.0,
             max_scroll: 0.0,
             // Off the panel, so nothing starts out hovered.
@@ -262,7 +273,7 @@ impl View {
 
     /// A view opened on one section of one tab, with the pointer off the panel.
     pub fn on(tab: usize, section: usize) -> Self {
-        let mut sections = [0; 5];
+        let mut sections = [0; 6];
         sections[tab] = section;
         Self {
             tab,
@@ -329,7 +340,8 @@ impl View {
             1 => clock(&mut ui, cfg, section),
             2 => player(&mut ui, cfg, section),
             3 => lyrics(&mut ui, cfg, section),
-            _ => visualizer(&mut ui, cfg, section),
+            4 => visualizer(&mut ui, cfg, section),
+            _ => system(&mut ui, cfg, section),
         };
         ui.end_group();
         ui.g.pop_clip();
@@ -1225,17 +1237,22 @@ impl Ui<'_> {
         self.choice("Grows from its", &mut label.align, aligns)?;
 
         self.group("Text")?;
+        self.text_style(label)?;
+
+        self.group("Direction")?;
+        self.choice("Runs", &mut label.direction, &DIRECTIONS)?;
+        self.choice("Letters", &mut label.letters, &LETTERS)
+    }
+
+    /// How a piece of text looks: font, size, weight, colour and so on.
+    fn text_style(&mut self, label: &mut Label) -> Result<()> {
         self.font_row("Font", &mut label.font)?;
         self.slider("Size", &mut label.size, 6.0, 240.0, 1.0)?;
         self.slider_u32("Weight", &mut label.weight, 100, 900, 100)?;
         self.color("Colour", &mut label.color, &THEME_COLORS)?;
         self.slider("Opacity", &mut label.opacity, 0.0, 1.0, 0.02)?;
         self.slider("Letter spacing", &mut label.spacing, 0.0, 1.0, 0.02)?;
-        self.toggle("Capitals", &mut label.uppercase)?;
-
-        self.group("Direction")?;
-        self.choice("Runs", &mut label.direction, &DIRECTIONS)?;
-        self.choice("Letters", &mut label.letters, &LETTERS)
+        self.toggle("Capitals", &mut label.uppercase)
     }
 
     /// A labelled row with one button. Returns whether it was clicked.
@@ -1609,6 +1626,210 @@ fn visualizer(ui: &mut Ui, cfg: &mut Config, section: usize) -> Result<()> {
             ui.slider("Highest (Hz)", &mut v.max_hz, 4000.0, 20_000.0, 500.0)
         }
     }
+}
+
+/// What the panel calls a reading, and a few names to pick for it.
+fn reading_kind(r: StatReading) -> (&'static str, &'static [(&'static str, &'static str)]) {
+    match r {
+        StatReading::Cpu => ("CPU", &[("CPU", "CPU"), ("Processor", "Processor")]),
+        StatReading::Ram => ("Memory", &[("RAM", "RAM"), ("Memory", "Memory")]),
+        StatReading::Gpu => ("Graphics", &[("GPU", "GPU"), ("Graphics", "Graphics")]),
+        StatReading::Vram => ("Video memory", &[("VRAM", "VRAM"), ("Video", "Video")]),
+        StatReading::Disks => ("Drives", &[("{drive}", "C:"), ("Disk {drive}", "Disk C:")]),
+        StatReading::Down => (
+            "Download",
+            &[("\u{2193}", "\u{2193}"), ("Down", "Down"), ("DL", "DL")],
+        ),
+        StatReading::Up => (
+            "Upload",
+            &[("\u{2191}", "\u{2191}"), ("Up", "Up"), ("UL", "UL")],
+        ),
+        StatReading::Battery => ("Battery", &[("BAT", "BAT"), ("Battery", "Battery")]),
+    }
+}
+
+fn system(ui: &mut Ui, cfg: &mut Config, section: usize) -> Result<()> {
+    let s = &mut cfg.stats;
+    let frame = s.frame;
+    match section {
+        0 => {
+            ui.group("")?;
+            ui.toggle("Show", &mut s.enabled)?;
+            ui.choice(
+                "Layout",
+                &mut s.structure,
+                &[
+                    (StatsStructure::Strip, "Strip"),
+                    (StatsStructure::List, "List"),
+                    (StatsStructure::Tiles, "Tiles"),
+                    (StatsStructure::Free, "Free, drag anywhere"),
+                ],
+            )?;
+            ui.choice(
+                "Runs",
+                &mut s.orientation,
+                &[
+                    (StatsOrientation::Across, "Across"),
+                    (StatsOrientation::Down, "Down"),
+                ],
+            )?;
+            ui.slider_u32("Per row (Tiles only)", &mut s.columns, 1, 9, 1)?;
+            ui.slider_u32("Refresh (ms)", &mut s.refresh_ms, 500, 5000, 100)?;
+            ui.slider("Gap between readings", &mut s.gap, 0.0, 100.0, 1.0)?;
+            ui.slider("Margin around them", &mut s.padding, 0.0, 100.0, 1.0)?;
+            ui.toggle("Card behind it", &mut s.card)?;
+            ui.slider("Opacity", &mut s.opacity, 0.0, 1.0, 0.05)?;
+            let mut top = s.layer == StatsLayer::Top;
+            ui.toggle("Stay above windows", &mut top)?;
+            if top != (s.layer == StatsLayer::Top) {
+                s.layer = if top {
+                    StatsLayer::Top
+                } else {
+                    StatsLayer::Inherit
+                };
+            }
+            ui.note("Staying above windows overrides the layer set on the General tab.")?;
+        }
+        1 => {
+            let mut moved = None;
+            for r in s.order.clone() {
+                let (title, presets) = reading_kind(r);
+                ui.group(title)?;
+                let rd = s.reading_mut(r);
+                ui.toggle("Show", &mut rd.show)?;
+                ui.choice_text("Name", &mut rd.name, presets)?;
+                ui.color(
+                    "Colour",
+                    &mut rd.color,
+                    &[("", "Default"), ("accent", "Accent")],
+                )?;
+                let warn = if r == StatReading::Battery {
+                    "Warn at or below (%)"
+                } else {
+                    "Warn at (%)"
+                };
+                ui.slider(warn, &mut rd.warn, 0.0, 100.0, 5.0)?;
+                if matches!(r, StatReading::Ram | StatReading::Vram | StatReading::Disks) {
+                    ui.choice(
+                        "Shows",
+                        &mut rd.value,
+                        &[
+                            (ValueFormat::Percent, "Percentage"),
+                            (ValueFormat::Amount, "Used / total"),
+                        ],
+                    )?;
+                }
+                if ui.action("Order", "Move up")? {
+                    moved = Some((r, -1));
+                }
+                if ui.action("", "Move down")? {
+                    moved = Some((r, 1));
+                }
+            }
+            ui.note("A warning level of 0 never warns.")?;
+            if let Some((r, delta)) = moved {
+                s.move_reading(r, delta);
+                ui.changed = true;
+            }
+        }
+        2 => {
+            ui.group("")?;
+            ui.choice(
+                "Meter",
+                &mut s.meter,
+                &[
+                    (StatsMeter::None, "None"),
+                    (StatsMeter::Bar, "Bar"),
+                    (StatsMeter::Ring, "Ring"),
+                ],
+            )?;
+            ui.slider(
+                "Bar length (0 = item width)",
+                &mut s.meter_length,
+                0.0,
+                600.0,
+                5.0,
+            )?;
+            ui.slider("Bar thickness", &mut s.meter_thickness, 1.0, 60.0, 1.0)?;
+            ui.slider("Ring size", &mut s.ring_size, 12.0, 400.0, 2.0)?;
+            ui.color("Colour", &mut s.meter_color, &THEME_COLORS)?;
+            ui.slider("Unfilled part", &mut s.track_opacity, 0.0, 1.0, 0.02)?;
+            ui.color("Warning colour", &mut s.warn_color, &[])?;
+        }
+        3 => {
+            ui.group("")?;
+            ui.choice(
+                "Names",
+                &mut s.names,
+                &[
+                    (StatsNames::Before, "Before the value"),
+                    (StatsNames::Above, "Above"),
+                    (StatsNames::After, "After"),
+                    (StatsNames::Hidden, "Hidden"),
+                ],
+            )?;
+            ui.group("Names")?;
+            ui.text_style(&mut s.name)?;
+            ui.group("Values")?;
+            ui.text_style(&mut s.value)?;
+        }
+        4 => {
+            ui.group("")?;
+            ui.choice(
+                "Speeds in",
+                &mut s.net_units,
+                &[
+                    (NetUnits::Bytes, "Bytes (MB/s)"),
+                    (NetUnits::Bits, "Bits (Mbps)"),
+                ],
+            )?;
+            ui.choice_text(
+                "Adapter",
+                &mut s.net_adapter,
+                &[
+                    ("", "Every connected adapter"),
+                    ("Wi-Fi", "Wi-Fi"),
+                    ("Ethernet", "Ethernet"),
+                ],
+            )?;
+            ui.choice_text(
+                "Drives",
+                &mut s.drives,
+                &[("", "Every drive"), ("C", "C only")],
+            )?;
+            ui.note("Other adapter names and drive letters can be set in the config file.")?;
+            for (label, r) in [
+                ("Download meter full (MB/s)", StatReading::Down),
+                ("Upload meter full (MB/s)", StatReading::Up),
+            ] {
+                let rd = s.reading_mut(r);
+                let before = (rd.max / 1e6) as f32;
+                let mut megabytes = before;
+                ui.slider(label, &mut megabytes, 0.0, 1000.0, 5.0)?;
+                if megabytes != before {
+                    rd.max = f64::from(megabytes) * 1e6;
+                }
+            }
+            ui.note("0 uses the fastest speed seen this session.")?;
+        }
+        _ => {
+            ui.group("Where its middle is")?;
+            ui.frame_position(&mut s.frame, false)?;
+            if s.structure == StatsStructure::Free {
+                for r in s.order.clone() {
+                    let rd = s.reading_mut(r);
+                    if !rd.show {
+                        continue;
+                    }
+                    ui.group(reading_kind(r).0)?;
+                    ui.position(frame, &mut rd.x, &mut rd.y)?;
+                }
+            } else {
+                ui.note("Choose the Free layout, or drag in edit layout, to place each reading.")?;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
