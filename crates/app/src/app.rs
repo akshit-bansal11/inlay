@@ -321,7 +321,7 @@ pub fn run() -> Result<()> {
     .ok();
 
     let media_shared = Arc::new(Mutex::new(MediaState::default()));
-    let stats_shared = Arc::default();
+    let stats_shared: Arc<Mutex<Sample>> = Arc::default();
     let mut app = App {
         gfx: Gfx::new()?,
         main,
