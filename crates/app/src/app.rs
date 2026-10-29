@@ -10,8 +10,9 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
 use inlay_core::color::{Rgba, parse_hex};
-use inlay_core::config::{Config, Layer};
+use inlay_core::config::{Config, Layer, StatsStructure};
 use inlay_core::lrclib::Query;
+use inlay_core::stats::Sample;
 use inlay_core::timefmt::LocalTime;
 use windows::Win32::Foundation::{
     ERROR_ALREADY_EXISTS, ERROR_SUCCESS, GetLastError, HANDLE, HWND, RECT, WAIT_OBJECT_0,
@@ -181,6 +182,7 @@ struct App {
     lyrics_gen: u64,
     lyrics_shared: Arc<Mutex<LyricsState>>,
     audio: Arc<Audio>,
+    stats: Sample,
 
     /// Pixels per layout pixel for the widgets: the primary monitor's DPI
     /// times how much the layout is grown or shrunk to fit its screen.
@@ -339,6 +341,7 @@ pub fn run() -> Result<()> {
         lyrics_gen: 0,
         lyrics_shared: Arc::default(),
         audio: capture::spawn(notify)?,
+        stats: Sample::default(),
         scale: 1.0,
         ui_scale: 1.0,
         edit: false,
@@ -488,6 +491,7 @@ impl App {
             lyrics: &self.lyrics,
             lyrics_gen: self.lyrics_gen,
             audio: &self.audio,
+            stats: &self.stats,
             now_ms: now,
             time,
             ms_to_next_second,
@@ -592,12 +596,14 @@ impl App {
             bottom: all.bottom.max(r.bottom),
         });
         // Whole pixels, so the window and its contents shift by the same amount.
-        let (dx, dy) = (
-            (bounds.left - FIT_PAD).round(),
-            (bounds.top - FIT_PAD).round(),
-        );
-        let w = ((bounds.right - bounds.left + 2.0 * FIT_PAD).ceil() as u32).max(80);
-        let h = ((bounds.bottom - bounds.top + 2.0 * FIT_PAD).ceil() as u32).max(40);
+        let pad = if kind == Kind::Stats {
+            self.cfg.stats.padding
+        } else {
+            FIT_PAD
+        };
+        let (dx, dy) = ((bounds.left - pad).round(), (bounds.top - pad).round());
+        let w = ((bounds.right - bounds.left + 2.0 * pad).ceil() as u32).max(80);
+        let h = ((bounds.bottom - bounds.top + 2.0 * pad).ceil() as u32).max(40);
 
         let frame = *kind.frame_mut(&mut self.cfg);
         if dx == 0.0 && dy == 0.0 && (frame.w, frame.h) == (w, h) {
@@ -958,6 +964,27 @@ impl App {
                     self.set_hot(index, over);
                     return;
                 };
+                // Dragging a System reading takes it out of the strip, list or
+                // grid: each reading is pinned where it is now, then moves.
+                if self.cfg.stats.structure != StatsStructure::Free
+                    && self.selected.iter().any(|(kind, _)| *kind == Kind::Stats)
+                {
+                    let spots: Vec<(u8, f32, f32)> = self
+                        .hosts
+                        .iter()
+                        .filter(|host| host.kind == Kind::Stats)
+                        .flat_map(|host| host.widget.parts())
+                        .map(|(id, r)| (*id, r.left, r.top))
+                        .collect();
+                    self.cfg.stats.seed_free(&spots);
+                    for host in self
+                        .hosts
+                        .iter_mut()
+                        .filter(|host| host.kind == Kind::Stats)
+                    {
+                        host.dirty = true;
+                    }
+                }
                 // Everything selected moves together, across widgets too.
                 for &(kind, id) in &self.selected {
                     kind.nudge(&mut self.cfg, id, sx - last_x, sy - last_y);

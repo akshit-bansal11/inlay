@@ -485,6 +485,66 @@ impl Gfx {
         unsafe { self.rt.FillEllipse(&ellipse, self.solid(c)) };
     }
 
+    pub fn stroke_circle(&self, x: f32, y: f32, radius: f32, width: f32, c: Rgba) {
+        let ellipse = D2D1_ELLIPSE {
+            point: point(x, y),
+            radiusX: radius,
+            radiusY: radius,
+        };
+        // SAFETY: the target and brush are live for the call; the ellipse is a local copy.
+        unsafe { self.rt.DrawEllipse(&ellipse, self.solid(c), width, None) };
+    }
+
+    /// An arc of a circle's outline, clockwise from `from_turn` (0 is twelve
+    /// o'clock) through `sweep_turn`, both in fractions of a turn.
+    pub fn stroke_arc(
+        &self,
+        centre: (f32, f32),
+        radius: f32,
+        from_turn: f32,
+        sweep_turn: f32,
+        width: f32,
+        c: Rgba,
+    ) -> Result<()> {
+        if sweep_turn >= 0.999 {
+            self.stroke_circle(centre.0, centre.1, radius, width, c);
+            return Ok(());
+        }
+        if sweep_turn <= 0.001 {
+            return Ok(());
+        }
+        let at = |turn: f32| {
+            let a = turn * std::f32::consts::TAU;
+            point(centre.0 + radius * a.sin(), centre.1 - radius * a.cos())
+        };
+        let (start, end) = (at(from_turn), at(from_turn + sweep_turn));
+        // SAFETY: the factory, sink and target are live for the call, and the
+        // geometry is closed before it is drawn.
+        unsafe {
+            let geometry = self.factory.CreatePathGeometry()?;
+            let sink = geometry.Open()?;
+            sink.BeginFigure(start, D2D1_FIGURE_BEGIN_HOLLOW);
+            sink.AddArc(&D2D1_ARC_SEGMENT {
+                point: end,
+                size: D2D_SIZE_F {
+                    width: radius,
+                    height: radius,
+                },
+                rotationAngle: 0.0,
+                sweepDirection: D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                arcSize: if sweep_turn > 0.5 {
+                    D2D1_ARC_SIZE_LARGE
+                } else {
+                    D2D1_ARC_SIZE_SMALL
+                },
+            });
+            sink.EndFigure(D2D1_FIGURE_END_OPEN);
+            sink.Close()?;
+            self.rt.DrawGeometry(&geometry, self.solid(c), width, None);
+        }
+        Ok(())
+    }
+
     /// A quarter of a disc: straight from `centre` to `from`, clockwise
     /// round the arc to `to`, and straight back.
     pub fn fill_quarter(
