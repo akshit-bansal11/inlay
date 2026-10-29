@@ -83,6 +83,21 @@ pub fn byte_rate(prev: u64, now: u64, secs: f64) -> f64 {
     (now - prev) as f64 / secs
 }
 
+/// Bytes received and sent since `prev` across adapters, both lists being
+/// (interface LUID, in, out). An adapter absent from `prev` is new and adds 0,
+/// and a counter that went down adds 0, so a late adapter's lifetime octets
+/// never show as one spike.
+pub fn octet_deltas(prev: &[(u64, u64, u64)], now: &[(u64, u64, u64)]) -> (u64, u64) {
+    let (mut down, mut up) = (0u64, 0u64);
+    for &(key, d, u) in now {
+        if let Some(&(_, pd, pu)) = prev.iter().find(|p| p.0 == key) {
+            down += d.saturating_sub(pd);
+            up += u.saturating_sub(pu);
+        }
+    }
+    (down, up)
+}
+
 /// Steps to the next unit once the value, before rounding, reaches 1000, so
 /// 999.96 shows as "1000.0" rather than "1.0" of the next unit. Bits are the
 /// bytes times eight.
@@ -330,10 +345,10 @@ impl StatsCfg {
     pub fn wanted(&self) -> Wanted {
         Wanted {
             interval_ms: self.refresh_ms,
-            shown: self
-                .order
-                .iter()
-                .copied()
+            // In the standard order, not the display one, so moving a reading
+            // does not look like a change to the sampler.
+            shown: StatReading::ALL
+                .into_iter()
                 .filter(|&r| self.reading(r).show)
                 .collect(),
             adapter: self.net_adapter.clone(),
@@ -720,6 +735,21 @@ mod tests {
 
     fn times(idle: u64, kernel: u64, user: u64) -> CpuTimes {
         CpuTimes { idle, kernel, user }
+    }
+
+    #[test]
+    fn a_new_or_reset_adapter_adds_no_spike() {
+        let prev = [(1, 100, 10), (2, 500, 50)];
+        let now = [(1, 150, 30), (2, 40, 60), (3, 9_000_000, 9_000_000)];
+        assert_eq!(octet_deltas(&prev, &now), (50, 30));
+    }
+
+    #[test]
+    fn moving_a_reading_does_not_change_what_is_wanted() {
+        let mut cfg = StatsCfg::default();
+        let before = cfg.wanted();
+        cfg.move_reading(StatReading::Cpu, 2);
+        assert_eq!(cfg.wanted(), before);
     }
 
     #[test]

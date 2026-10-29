@@ -111,14 +111,16 @@ pub struct Sampler {
     cpu: Option<CpuTimes>,
     net: Option<Net>,
     gpu: Option<Gpu>,
+    /// Opening the graphics query failed; not retried until graphics is off and on again.
+    gpu_failed: bool,
     slow: Option<Slow>,
     /// One bit per [`StatReading`] already logged as failing.
     logged: u8,
 }
 
 struct Net {
-    down: u64,
-    up: u64,
+    /// (interface LUID, octets in, octets out) per adapter counted.
+    rows: Vec<(u64, u64, u64)>,
     at: Instant,
     adapter: String,
 }
@@ -138,6 +140,7 @@ impl Sampler {
             cpu: None,
             net: None,
             gpu: None,
+            gpu_failed: false,
             slow: None,
             logged: 0,
         };
@@ -170,10 +173,13 @@ impl Sampler {
         }
 
         if wanted.gpu() {
-            if self.gpu.is_none() {
+            if self.gpu.is_none() && !self.gpu_failed {
                 match Gpu::open() {
                     Ok(gpu) => self.gpu = Some(gpu),
-                    Err(what) => self.fail(StatReading::Gpu, &what),
+                    Err(what) => {
+                        self.gpu_failed = true;
+                        self.fail(StatReading::Gpu, &what);
+                    }
                 }
             }
             if let Some(gpu) = &self.gpu {
@@ -195,6 +201,7 @@ impl Sampler {
             }
         } else {
             self.gpu = None;
+            self.gpu_failed = false;
         }
 
         if wanted.has(StatReading::Down) || wanted.has(StatReading::Up) {
@@ -203,20 +210,20 @@ impl Sampler {
                 self.fail(StatReading::Down, "network table not read");
             }
             let at = Instant::now();
-            if let (Some(prev), Some((down, up))) = (&self.net, now)
+            if let (Some(prev), Some(rows)) = (&self.net, &now)
                 && prev.adapter == wanted.adapter
             {
                 let secs = at.duration_since(prev.at).as_secs_f64();
+                let (down, up) = stats::octet_deltas(&prev.rows, rows);
                 if wanted.has(StatReading::Down) {
-                    sample.down = Some(stats::byte_rate(prev.down, down, secs));
+                    sample.down = Some(stats::byte_rate(0, down, secs));
                 }
                 if wanted.has(StatReading::Up) {
-                    sample.up = Some(stats::byte_rate(prev.up, up, secs));
+                    sample.up = Some(stats::byte_rate(0, up, secs));
                 }
             }
-            self.net = now.map(|(down, up)| Net {
-                down,
-                up,
+            self.net = now.map(|rows| Net {
+                rows,
                 at,
                 adapter: wanted.adapter.clone(),
             });
@@ -358,9 +365,9 @@ fn memory() -> Option<Usage> {
     })
 }
 
-/// Bytes received and sent so far by the network adapters that are up and
+/// Octets in and out, per adapter, of the network adapters that are up and
 /// match the filter: hardware ones, not their filter layers or loopback.
-fn net_octets(filter: &str) -> Option<(u64, u64)> {
+fn net_octets(filter: &str) -> Option<Vec<(u64, u64, u64)>> {
     let mut table: *mut MIB_IF_TABLE2 = std::ptr::null_mut();
     // SAFETY: `table` is a live local the call points at memory it allocates.
     if unsafe { GetIfTable2(&mut table) } != ERROR_SUCCESS || table.is_null() {
@@ -370,7 +377,7 @@ fn net_octets(filter: &str) -> Option<(u64, u64)> {
     let rows = unsafe {
         std::slice::from_raw_parts((*table).Table.as_ptr(), (*table).NumEntries as usize)
     };
-    let (mut down, mut up) = (0u64, 0u64);
+    let mut found = Vec::new();
     for row in rows {
         let flags = row.InterfaceAndOperStatusFlags._bitfield;
         if row.OperStatus == IfOperStatusUp
@@ -379,13 +386,14 @@ fn net_octets(filter: &str) -> Option<(u64, u64)> {
             && row.Type != IF_TYPE_SOFTWARE_LOOPBACK
             && stats::adapter_matches(filter, &wide(&row.Alias), &wide(&row.Description))
         {
-            down = down.wrapping_add(row.InOctets);
-            up = up.wrapping_add(row.OutOctets);
+            // SAFETY: `Value` is the u64 view of the LUID union, always valid.
+            let luid = unsafe { row.InterfaceLuid.Value };
+            found.push((luid, row.InOctets, row.OutOctets));
         }
     }
     // SAFETY: `table` came from GetIfTable2, is freed once, and `rows` is not used after.
     unsafe { FreeMibTable(table.cast_const().cast()) };
-    Some((down, up))
+    Some(found)
 }
 
 /// A NUL-terminated UTF-16 buffer as text.

@@ -979,6 +979,7 @@ impl App {
                 if self.cfg.stats.structure != StatsStructure::Free
                     && self.selected.iter().any(|(kind, _)| *kind == Kind::Stats)
                 {
+                    // Only readings drawn have a spot; the rest keep their stored x, y.
                     let spots: Vec<(u8, f32, f32)> = self
                         .hosts
                         .iter()
@@ -1443,6 +1444,10 @@ impl App {
 
     /// A new reading arrived from the sampler thread.
     fn stats_changed(&mut self) {
+        // A sample posted just before a pause must not refill what the pause cleared.
+        if self.sampler_plan.is_none() {
+            return;
+        }
         let Ok(new) = self.stats_shared.lock().map(|sample| sample.clone()) else {
             return;
         };

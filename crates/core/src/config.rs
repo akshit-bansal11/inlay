@@ -1382,6 +1382,8 @@ impl Config {
         range(&mut s.meter_length, 0.0, 2000.0, 0.0);
         range(&mut s.meter_thickness, 1.0, 60.0, 4.0);
         range(&mut s.ring_size, 12.0, 400.0, 28.0);
+        // A ring's radius is (size - thickness) / 2: it cannot go negative.
+        s.meter_thickness = s.meter_thickness.min(s.ring_size / 2.0);
         s.name.sanitize();
         s.value.sanitize();
         repair_order(&mut s.order);
@@ -1679,6 +1681,15 @@ mod tests {
         assert_eq!(s.structure, StatsStructure::Free);
         assert_eq!((s.ram.x, s.ram.y), (5.0, 6.0));
         assert_eq!(s.cpu, StatsCfg::default().cpu);
+    }
+
+    #[test]
+    fn a_ring_is_never_thicker_than_its_radius() {
+        let mut cfg = Config::default();
+        cfg.stats.ring_size = 12.0;
+        cfg.stats.meter_thickness = 60.0;
+        let s = cfg.sanitized().stats;
+        assert!(s.meter_thickness <= s.ring_size / 2.0);
     }
 
     #[test]
