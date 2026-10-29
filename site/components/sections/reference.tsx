@@ -110,12 +110,6 @@ const TESTED: string[] = [
 // Summaries of CHANGELOG.md, one per section, in its order.
 const HISTORY: { version: string; date: string; summary: string }[] = [
   {
-    version: "2.2.0",
-    date: "2026-10-29",
-    summary:
-      "A fifth widget, System: CPU, RAM, GPU, video memory, each drive, network down and up, and the battery, as a strip, a list, tiles or freely placed readings, with numbers, bars or rings and a warning colour. It is on by default, top right, and takes readings only while it is shown and not covered. Its own layer can keep it above windows while the other widgets stay on the desktop. inlay.exe --probe-stats prints one reading of everything.",
-  },
-  {
     version: "2.1.0",
     date: "2026-10-20",
     summary:

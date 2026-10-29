@@ -6,23 +6,11 @@ uses [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [2.2.0] - 2026-10-29
-
 ### Added
 
-- A **System** widget, the fifth: CPU, RAM, GPU, video memory, each fixed and
-  removable drive (network and CD drives are skipped), network down and up,
-  and the battery (hidden without one). It is **on by default** for existing
-  installs, top right. Its readings can run as a strip, a list, a grid of
-  tiles, or each be placed freely; shown as numbers, bars or rings; warn in a
-  colour past a threshold; and have their names before, above, after or
-  hidden. Set in `[stats]` and on a System tab in settings. Dragging a
-  reading in edit layout switches the widget to the free structure. The
-  readings are taken only while the widget is shown and not covered.
-- `stats.layer` sets a layer for the System widget alone. The panel's "Stay
-  above windows" switch sets it to `top` for that widget only.
-- `inlay.exe --probe-stats` prints one reading of every source the System
-  widget uses.
+- A **System** widget, the fifth: CPU, RAM, GPU, video memory, each fixed and removable drive (network and CD drives are skipped), network down and up, and the battery (hidden without one). It is **on by default** for existing installs, top right. Its readings can run as a strip, a list, a grid of tiles, or each be placed freely; shown as numbers, bars or rings; warn in a colour past a threshold; and have their names before, above, after or hidden. Set in `[stats]` and on a System tab in settings. Dragging a reading in edit layout switches the widget to the free structure.
+- `stats.layer` sets a layer for the System widget alone. The panel's "Stay above windows" switch sets it to `top` for that widget only.
+- `inlay.exe --probe-stats` prints one reading of every source the System widget uses.
 - Snapshots of every System structure.
 
 ## [2.1.0] - 2026-10-20
@@ -354,8 +342,7 @@ First build. A pre-release: see "Not yet verified" below before relying on it.
 - Staying visible through Show Desktop (Win+D) is untested.
 - The exe is unsigned, so Windows SmartScreen warns on first launch.
 
-[Unreleased]: https://github.com/akshit-bansal11/inlay/compare/v2.2.0...HEAD
-[2.2.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v2.2.0
+[Unreleased]: https://github.com/akshit-bansal11/inlay/compare/v2.1.0...HEAD
 [2.1.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v2.1.0
 [2.0.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v2.0.0
 [1.4.0]: https://github.com/akshit-bansal11/inlay/releases/tag/v1.4.0
