@@ -14,7 +14,7 @@ const DECISIONS: { id: string; question: string; answer: string }[] = [
     id: "engine",
     question: "Why is it not a skin engine?",
     answer:
-      "Cost. A Rainmeter setup re-runs interpreted measures on timers and redraws whether or not anything changed. Here each widget is compiled, sleeps until something it shows has changed, and is not drawn at all while it is covered. So there are no plugins, no scripts and no user-authored skins; every visual and behavioural parameter of the five widgets is a setting instead.",
+      "Cost. A Rainmeter setup re-runs interpreted measures on timers and redraws whether or not anything changed. Here each widget is compiled, sleeps until something it shows has changed, and is not drawn at all while it is covered. So there are no plugins, no scripts and no user-authored skins; every visual and behavioural parameter of the four widgets is a setting instead.",
   },
   {
     id: "gsmtc",

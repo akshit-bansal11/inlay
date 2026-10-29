@@ -3,7 +3,7 @@
 //! `inlay` runs the app. `inlay --snapshot <dir>` renders the
 //! widgets to PNG files from made-up data.
 //!
-//! Four diagnostics for a machine where a widget stays empty. There is no
+//! Three diagnostics for a machine where a widget stays empty. There is no
 //! console, so redirect their output to a file to read it:
 //! - `--probe` prints what Windows reports about Spotify, and the level of
 //!   Spotify's audio, for eight seconds. `--probe <name.exe>` listens to that
@@ -11,7 +11,6 @@
 //! - `--probe-system` does the same but listens to everything the PC plays.
 //! - `--probe-lyrics <title> <artist>` looks one track up, for word timing
 //!   and on LRCLIB.
-//! - `--probe-stats` prints one full reading of the System widget's sources.
 
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 
@@ -23,7 +22,6 @@ mod media;
 mod menu;
 mod settings;
 mod snapshot;
-mod sysinfo;
 mod tray;
 mod widgets;
 mod window;
@@ -187,16 +185,6 @@ fn probe_lyrics(title: &str, artist: &str) {
     }
 }
 
-/// Reads every source of the System widget twice, a second apart, so the
-/// rates have something to compare, and prints the second reading.
-fn probe_stats() {
-    sysinfo::init_thread();
-    let wanted = inlay_core::stats::Wanted::all();
-    let mut sampler = sysinfo::Sampler::new(&wanted);
-    std::thread::sleep(Duration::from_secs(1));
-    println!("{:#?}", sampler.sample(&wanted));
-}
-
 /// Prints what the media session and the audio capture report, twice a second.
 fn probe(source: AudioSource) -> Result<()> {
     let shared = Arc::new(Mutex::new(media::MediaState::default()));
@@ -257,10 +245,6 @@ fn main() {
         Some("--probe-lyrics") => {
             let arg = |i: usize| args.get(i).map_or("", String::as_str);
             probe_lyrics(arg(1), arg(2));
-            Ok(())
-        }
-        Some("--probe-stats") => {
-            probe_stats();
             Ok(())
         }
         _ => {

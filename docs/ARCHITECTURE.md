@@ -1,6 +1,6 @@
 # Architecture
 
-Inlay is one Windows process that sets five live widgets into the desktop: a clock, a spectrum visualizer, synced lyrics, a now-playing player and system stats. The middle three follow whatever Spotify plays; the system stats read the PC itself. It is not a skin engine. There are no plugins, no scripts and no user-authored skins; every visual and behavioural parameter of the five widgets is a setting instead.
+Inlay is one Windows process that sets four live widgets into the desktop: a clock, a spectrum visualizer, synced lyrics and a now-playing player. The last three follow whatever Spotify plays. It is not a skin engine. There are no plugins, no scripts and no user-authored skins; every visual and behavioural parameter of the four widgets is a setting instead.
 
 The reason it exists is cost. A Rainmeter setup re-runs interpreted measures on timers and redraws whether or not anything changed. Here each widget is compiled, sleeps until something it shows has changed, and is not drawn at all while it is covered.
 
@@ -16,14 +16,12 @@ crates/core   pure logic, no Windows types, unit tested anywhere
   timefmt     clock formats
   config      the TOML schema, defaults, clamps, migrations
   mark        the logo's geometry and colours, shared by the tray, the menu and the icon script
-  stats       System widget logic: samples, rates, formatting, layout
 
 crates/app    the exe
   UI thread       message loop, windows, Direct2D drawing, settings panel
   media thread    Windows media session events for Spotify
   capture thread  WASAPI loopback; hands samples to the UI thread
   lyrics thread   one short-lived thread per track
-  sampler thread  CPU, RAM, GPU (PDH), drives, network, battery; paused while the widget is not drawn
 
 crates/desk   the macOS and Linux preview (egui), see below
 ```
@@ -38,7 +36,6 @@ crates/desk   the macOS and Linux preview (egui), see below
 
 - **Track, position, art and transport** come from the Windows media session API (GSMTC), filtered to Spotify's session. There is no Spotify Web API, no client ID and no OAuth, so it works on free accounts and needs no setup.
 - **Audio** comes from WASAPI process loopback on Spotify's process tree: the capture thread keeps the newest samples, and the visualizer widget runs the FFT and maps it to bands on the UI thread (`crates/app/src/widgets/visualizer.rs`). So the visualizer moves to Spotify and not to a game or a call. System loopback is a setting for when that is wanted.
-- **System stats** are local counters only: `GetSystemTimes` and `GlobalMemoryStatusEx` for CPU and RAM, PDH GPU Engine and GPU Adapter Memory counters for GPU use and video memory in use, DXGI for the video memory total, `GetLogicalDrives` and `GetDiskFreeSpaceExW` for drives, `GetIfTable2` per adapter for network speed, and `GetSystemPowerStatus` for the battery. The drive list and the battery are read every 30 seconds. Nothing leaves the machine.
 - **Lyrics** come from two places. LRCLIB answers first, with the time each line starts. When word timing is on (off by default), a LyricsPlus server, if it has the track, then replaces that with the time each syllable is sung. Both answers are cached on disk; a miss is remembered for a week. A server that is down is not remembered as a miss.
 
 ## The loop
@@ -51,15 +48,13 @@ One thread owns every window. Each pass it drains the message queue, ticks each 
 
 The most impatient answer wins. When every widget is idle the thread blocks on the message queue and uses no CPU. `Frame` is reserved for motion that is actually on screen: a scroll between lyric lines, a word filling in, the visualizer while there is sound. Returning it otherwise is the bug this project exists to not have.
 
-The System widget always answers `Idle`. The sampler thread posts a message after each sample, and that message wakes the widget, which redraws only when a shown text has changed.
-
 Other threads never touch a window. They write to shared state and post a message; the UI thread reads the state when the message arrives.
 
 ## Drawing
 
 Each widget is its own layered, click-through, no-activate tool window with a DirectComposition swap chain, drawn with Direct2D and DirectWrite through one shared device. Widgets sit at the bottom of the window stack, on the desktop under every app; they draw over the desktop icons rather than behind them. A widget under a maximized or fullscreen window is not drawn.
 
-The clock and the player have no box. Each of their elements has its own position, and the window is wrapped around whatever was drawn. In edit mode that window covers the work area instead and does not move, so dragging one element cannot disturb the others; the space between elements passes clicks through. The lyrics, the visualizer and the System widget keep a frame, because it is what sizes them.
+The clock and the player have no box. Each of their elements has its own position, and the window is wrapped around whatever was drawn. In edit mode that window covers the work area instead and does not move, so dragging one element cannot disturb the others; the space between elements passes clicks through. The lyrics and the visualizer keep a frame, because it is what sizes them.
 
 ## Keeping lyrics in time
 
@@ -75,7 +70,7 @@ The settings panel is an ordinary window drawn by the app itself, immediate-mode
 
 ## What the tests cover
 
-`crates/core` carries most of them: the LRC parser on real, half-broken files; word timing and its invariants; the sync clock against drift, jitter, seeks and pauses; title cleaning; config defaults, clamps and migrations from older files; band mapping; colour; the System widget's rates, formatting and layout.
+`crates/core` carries most of them: the LRC parser on real, half-broken files; word timing and its invariants; the sync clock against drift, jitter, seeks and pauses; title cleaning; config defaults, clamps and migrations from older files; band mapping; colour.
 
 `crates/app` tests what can be tested without a window: sample mixing, the lyric widget's place-in-the-song logic, the settings panel's hex field, the tray icon's pixels.
 
@@ -97,4 +92,4 @@ The macOS and Linux preview. It reads the same `config.toml` and uses `inlay-cor
 - **Lyrics.** `ureq` requests, with the same cache format as the Windows app. Album art is downloaded from the https address Spotify gives.
 - **Tray.** A tray or menu-bar icon with Open config file, Open fonts folder and Quit.
 
-Not in the preview: the settings panel, edit-layout dragging, hotkeys, start at login. It has no System widget, and it ignores `[stats]` in the config. CI builds and checks it; it has not been tried on real machines beyond that.
+Not in the preview: the settings panel, edit-layout dragging, hotkeys, start at login. CI builds and checks it; it has not been tried on real machines beyond that.
