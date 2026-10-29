@@ -221,7 +221,8 @@ const CONFIG: { key: string; value: string; means: string }[] = [
   {
     key: "stats.layer",
     value: '"inherit"',
-    means: '"inherit" follows general.layer; "desktop", "normal" or "top" set this widget alone.',
+    means:
+      '"inherit" follows general.layer; "desktop", "normal" or "top" set this widget alone.',
   },
   {
     key: "stats.order",
