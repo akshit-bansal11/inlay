@@ -258,7 +258,7 @@ pub fn run(dir: &Path) -> Result<()> {
     ));
     looks.push((
         "stats-tiles-rings".to_owned(),
-        stats_look(760, 200, |s| {
+        stats_look(524, 214, |s| {
             s.structure = StatsStructure::Tiles;
             s.columns = 4;
             s.meter = StatsMeter::Ring;
