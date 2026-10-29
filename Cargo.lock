@@ -1710,7 +1710,7 @@ dependencies = [
 
 [[package]]
 name = "inlay"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "embed-resource",
  "inlay-core",
@@ -1723,7 +1723,7 @@ dependencies = [
 
 [[package]]
 name = "inlay-core"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1732,7 +1732,7 @@ dependencies = [
 
 [[package]]
 name = "inlay-desk"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "chrono",
  "cpal",
