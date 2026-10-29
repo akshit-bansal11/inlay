@@ -2,6 +2,7 @@ import {
   ArrowRight,
   AudioLines,
   Clock3,
+  Cpu,
   Disc3,
   type LucideIcon,
   MicVocal,
@@ -55,6 +56,11 @@ const WIDGETS: { title: string; Icon: LucideIcon; body: string }[] = [
     body: "Album art, title, artist, a progress bar you can click to seek, and previous, play/pause and next.",
   },
   {
+    title: "System",
+    Icon: Cpu,
+    body: "CPU, RAM, GPU, video memory, each drive, network speed and battery, as numbers, bars or rings. It reads the PC itself, not Spotify.",
+  },
+  {
     title: "Edit layout",
     Icon: Move,
     body: "The clock and the player have no box. Press Ctrl+Alt+E and drag the day, the time, the date, the art, the title, each button, the progress bar and both times anywhere, one at a time. Shift+click several to move them as one.",
@@ -101,7 +107,7 @@ const INSTALL: string[] = [
   "Download Inlay-<version>.exe from the latest release. There is no installer.",
   "Run it. SmartScreen asks first: More info, then Run anyway.",
   "It lives in the notification area. Double-click its icon for settings, or right-click it for a small menu.",
-  "The clock shows at once. For the other three, play something in the Spotify desktop app.",
+  "The clock and the System widget show at once. For the visualizer, lyrics and player, play something in the Spotify desktop app.",
   "On macOS or Linux (preview), download Inlay-<version>-macos.zip or Inlay-<version>-linux-x86_64.tar.gz instead. The full install guide has the first-run steps.",
 ];
 
@@ -163,7 +169,7 @@ export default function Page() {
                 fade would leave it invisible until the JavaScript arrives. */}
             <div>
               <p className="bg-card shadow-card text-dim inline-flex rounded-full px-4 py-1.5 text-sm font-bold">
-                Windows 11 · macOS and Linux preview · four live widgets
+                Windows 11 · macOS and Linux preview · five live widgets
               </p>
               <h1 className="mt-6 max-w-[15ch] text-[2.75rem] text-balance leading-[1.02] font-black tracking-[-0.025em] sm:text-6xl lg:text-7xl">
                 Live widgets, set into your Windows desktop.
@@ -239,10 +245,11 @@ export default function Page() {
 
         {/* What you get */}
         <section id="widgets" className={SECTION}>
-          <Heading eyebrow="What you get" title="Four widgets, and no skin engine.">
-            A clock that stands on its own, and three widgets that follow the music.
-            There are no plugins, no scripts and no user-authored skins: every visual
-            and behavioural parameter of the four widgets is a setting instead.
+          <Heading eyebrow="What you get" title="Five widgets, and no skin engine.">
+            A clock that stands on its own, three widgets that follow the music, and a
+            System widget that reads the PC. There are no plugins, no scripts and no
+            user-authored skins: every visual and behavioural parameter of the five
+            widgets is a setting instead.
           </Heading>
 
           <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

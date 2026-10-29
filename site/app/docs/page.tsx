@@ -10,7 +10,7 @@ import { SOCIAL_IMAGE } from "@/lib/nav";
 
 const TITLE = "Inlay — documentation";
 const DESCRIPTION =
-  "Full Inlay documentation: install, the four widgets, edit layout, settings and config.toml, hotkeys, lyrics sources, architecture, privacy, and the developer guide, on one page.";
+  "Full Inlay documentation: install, the five widgets, edit layout, settings and config.toml, hotkeys, lyrics sources, architecture, privacy, and the developer guide, on one page.";
 
 // A page's openGraph replaces the layout's whole object rather than merging into it,
 // hence type, site name and image again here.

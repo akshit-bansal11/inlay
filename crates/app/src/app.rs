@@ -10,8 +10,9 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
 use inlay_core::color::{Rgba, parse_hex};
-use inlay_core::config::{Config, Layer};
+use inlay_core::config::{Config, Layer, StatsStructure};
 use inlay_core::lrclib::Query;
+use inlay_core::stats::{Sample, Wanted};
 use inlay_core::timefmt::LocalTime;
 use windows::Win32::Foundation::{
     ERROR_ALREADY_EXISTS, ERROR_SUCCESS, GetLastError, HANDLE, HWND, RECT, WAIT_OBJECT_0,
@@ -44,6 +45,7 @@ use crate::lyrics::{self, Lyrics, LyricsState};
 use crate::media::{self, Cmd, MediaState};
 use crate::menu::{Menu, ORANGE, Pick};
 use crate::settings::{Panel, Status};
+use crate::sysinfo::{self, Control};
 use crate::tray::Tray;
 use crate::widgets::{Action, Ctx, Kind, Part, Wake, Widget};
 use crate::window::{self, Cover, Event, Mouse, Z};
@@ -181,6 +183,11 @@ struct App {
     lyrics_gen: u64,
     lyrics_shared: Arc<Mutex<LyricsState>>,
     audio: Arc<Audio>,
+    stats: Sample,
+    stats_shared: Arc<Mutex<Sample>>,
+    sampler: Sender<Control>,
+    /// What the sampler thread was last told; `None` is paused.
+    sampler_plan: Option<Wanted>,
 
     /// Pixels per layout pixel for the widgets: the primary monitor's DPI
     /// times how much the layout is grown or shrunk to fit its screen.
@@ -314,6 +321,7 @@ pub fn run() -> Result<()> {
     .ok();
 
     let media_shared = Arc::new(Mutex::new(MediaState::default()));
+    let stats_shared: Arc<Mutex<Sample>> = Arc::default();
     let mut app = App {
         gfx: Gfx::new()?,
         main,
@@ -339,6 +347,10 @@ pub fn run() -> Result<()> {
         lyrics_gen: 0,
         lyrics_shared: Arc::default(),
         audio: capture::spawn(notify)?,
+        stats: Sample::default(),
+        sampler: sysinfo::spawn(stats_shared.clone(), notify),
+        stats_shared,
+        sampler_plan: None,
         scale: 1.0,
         ui_scale: 1.0,
         edit: false,
@@ -488,6 +500,7 @@ impl App {
             lyrics: &self.lyrics,
             lyrics_gen: self.lyrics_gen,
             audio: &self.audio,
+            stats: &self.stats,
             now_ms: now,
             time,
             ms_to_next_second,
@@ -592,12 +605,14 @@ impl App {
             bottom: all.bottom.max(r.bottom),
         });
         // Whole pixels, so the window and its contents shift by the same amount.
-        let (dx, dy) = (
-            (bounds.left - FIT_PAD).round(),
-            (bounds.top - FIT_PAD).round(),
-        );
-        let w = ((bounds.right - bounds.left + 2.0 * FIT_PAD).ceil() as u32).max(80);
-        let h = ((bounds.bottom - bounds.top + 2.0 * FIT_PAD).ceil() as u32).max(40);
+        let pad = if kind == Kind::Stats {
+            self.cfg.stats.padding
+        } else {
+            FIT_PAD
+        };
+        let (dx, dy) = ((bounds.left - pad).round(), (bounds.top - pad).round());
+        let w = ((bounds.right - bounds.left + 2.0 * pad).ceil() as u32).max(80);
+        let h = ((bounds.bottom - bounds.top + 2.0 * pad).ceil() as u32).max(40);
 
         let frame = *kind.frame_mut(&mut self.cfg);
         if dx == 0.0 && dy == 0.0 && (frame.w, frame.h) == (w, h) {
@@ -778,6 +793,7 @@ impl App {
                 self.poke();
             }
             Event::Audio => self.poke(),
+            Event::Stats => self.stats_changed(),
             Event::Display => {
                 self.sync_windows();
                 self.redraw_all();
@@ -958,6 +974,28 @@ impl App {
                     self.set_hot(index, over);
                     return;
                 };
+                // Dragging a System reading takes it out of the strip, list or
+                // grid: each reading is pinned where it is now, then moves.
+                if self.cfg.stats.structure != StatsStructure::Free
+                    && self.selected.iter().any(|(kind, _)| *kind == Kind::Stats)
+                {
+                    // Only readings drawn have a spot; the rest keep their stored x, y.
+                    let spots: Vec<(u8, f32, f32)> = self
+                        .hosts
+                        .iter()
+                        .filter(|host| host.kind == Kind::Stats)
+                        .flat_map(|host| host.widget.parts())
+                        .map(|(id, r)| (*id, r.left, r.top))
+                        .collect();
+                    self.cfg.stats.seed_free(&spots);
+                    for host in self
+                        .hosts
+                        .iter_mut()
+                        .filter(|host| host.kind == Kind::Stats)
+                    {
+                        host.dirty = true;
+                    }
+                }
                 // Everything selected moves together, across widgets too.
                 for &(kind, id) in &self.selected {
                     kind.nudge(&mut self.cfg, id, sx - last_x, sy - last_y);
@@ -1082,17 +1120,25 @@ impl App {
     /// Keeps desktop-layer widgets visible through Show Desktop (Win+D), which
     /// raises the desktop over every window, bottom-pinned ones included.
     fn check_show_desktop(&mut self, foreground: HWND) {
-        if self.cfg.general.layer != Layer::Desktop || self.edit {
+        if self.edit {
             return;
         }
-        let Some(probe) = self.hosts.iter().find(|host| host.visible) else {
+        let desktop: Vec<usize> = (0..self.hosts.len())
+            .filter(|&i| self.hosts[i].kind.layer(&self.cfg) == Layer::Desktop)
+            .collect();
+        let Some(probe) = desktop
+            .iter()
+            .map(|&i| &self.hosts[i])
+            .find(|host| host.visible)
+        else {
             return;
         };
         let covered = window::desktop_covers(probe.hwnd);
         if covered && !self.raised {
             self.raised = true;
-            window::set_pin_bottom(false);
-            for host in &self.hosts {
+            window::set_pinned(&[]);
+            for &i in &desktop {
+                let host = &self.hosts[i];
                 // Topmost then not: lands at the top of the ordinary windows,
                 // which is just above the raised desktop.
                 window::set_z(host.hwnd, Z::Top);
@@ -1282,15 +1328,16 @@ impl App {
         self.scale = self.ui_scale * self.cfg.general.layout_scale(area_h);
         let scale = self.scale;
         let px = |dip: f32| (dip * scale).round() as i32;
-        let layer = self.cfg.general.layer;
         let pausing =
             self.cfg.general.pause_on_fullscreen && !self.edit && self.cover != Cover::None;
 
         // Unpinned while reordering, or the pin would undo it.
-        window::set_pin_bottom(false);
+        window::set_pinned(&[]);
         window::set_edit_mode(self.edit);
 
+        let mut pinned = Vec::new();
         for host in &mut self.hosts {
+            let layer = host.kind.layer(&self.cfg);
             let frame = host.kind.placed(&self.cfg, (aw as f32 / scale) as i32);
             let (left, top) =
                 frame.origin_within((aw as f32 / scale) as i32, (ah as f32 / scale) as i32);
@@ -1364,9 +1411,50 @@ impl App {
                 window::set_z(host.hwnd, Z::Normal);
                 window::set_z(host.hwnd, Z::Bottom);
             }
+            if layer == Layer::Desktop && !self.edit && !self.raised {
+                pinned.push(host.hwnd);
+            }
         }
 
-        window::set_pin_bottom(layer == Layer::Desktop && !self.edit && !self.raised);
+        window::set_pinned(&pinned);
+        self.sync_sampler();
+    }
+
+    /// Tells the sampler thread what to read, or to stop while no System
+    /// widget is on screen: nothing is read, and nothing wakes the app.
+    fn sync_sampler(&mut self) {
+        let on = self
+            .hosts
+            .iter()
+            .any(|h| h.kind == Kind::Stats && h.visible && !h.paused);
+        let plan = on.then(|| self.cfg.stats.wanted());
+        if plan == self.sampler_plan {
+            return;
+        }
+        // A send fails only when the thread is gone, as with the media thread.
+        let _ = self.sampler.send(match &plan {
+            Some(wanted) => Control::Run(wanted.clone()),
+            None => Control::Pause,
+        });
+        if plan.is_none() {
+            self.stats = Sample::default();
+        }
+        self.sampler_plan = plan;
+    }
+
+    /// A new reading arrived from the sampler thread.
+    fn stats_changed(&mut self) {
+        // A sample posted just before a pause must not refill what the pause cleared.
+        if self.sampler_plan.is_none() {
+            return;
+        }
+        let Ok(new) = self.stats_shared.lock().map(|sample| sample.clone()) else {
+            return;
+        };
+        self.stats = new;
+        for host in self.hosts.iter_mut().filter(|h| h.kind == Kind::Stats) {
+            host.due = Due::Now;
+        }
     }
 }
 
