@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use inlay_core::color::{Rgba, parse_hex};
 use inlay_core::config::{Config, Layer, StatsStructure};
 use inlay_core::lrclib::Query;
-use inlay_core::stats::Sample;
+use inlay_core::stats::{Sample, Wanted};
 use inlay_core::timefmt::LocalTime;
 use windows::Win32::Foundation::{
     ERROR_ALREADY_EXISTS, ERROR_SUCCESS, GetLastError, HANDLE, HWND, RECT, WAIT_OBJECT_0,
@@ -45,6 +45,7 @@ use crate::lyrics::{self, Lyrics, LyricsState};
 use crate::media::{self, Cmd, MediaState};
 use crate::menu::{Menu, ORANGE, Pick};
 use crate::settings::{Panel, Status};
+use crate::sysinfo::{self, Control};
 use crate::tray::Tray;
 use crate::widgets::{Action, Ctx, Kind, Part, Wake, Widget};
 use crate::window::{self, Cover, Event, Mouse, Z};
@@ -183,6 +184,10 @@ struct App {
     lyrics_shared: Arc<Mutex<LyricsState>>,
     audio: Arc<Audio>,
     stats: Sample,
+    stats_shared: Arc<Mutex<Sample>>,
+    sampler: Sender<Control>,
+    /// What the sampler thread was last told; `None` is paused.
+    sampler_plan: Option<Wanted>,
 
     /// Pixels per layout pixel for the widgets: the primary monitor's DPI
     /// times how much the layout is grown or shrunk to fit its screen.
@@ -316,6 +321,7 @@ pub fn run() -> Result<()> {
     .ok();
 
     let media_shared = Arc::new(Mutex::new(MediaState::default()));
+    let stats_shared = Arc::default();
     let mut app = App {
         gfx: Gfx::new()?,
         main,
@@ -342,6 +348,9 @@ pub fn run() -> Result<()> {
         lyrics_shared: Arc::default(),
         audio: capture::spawn(notify)?,
         stats: Sample::default(),
+        sampler: sysinfo::spawn(stats_shared.clone(), notify),
+        stats_shared,
+        sampler_plan: None,
         scale: 1.0,
         ui_scale: 1.0,
         edit: false,
@@ -784,6 +793,7 @@ impl App {
                 self.poke();
             }
             Event::Audio => self.poke(),
+            Event::Stats => self.stats_changed(),
             Event::Display => {
                 self.sync_windows();
                 self.redraw_all();
@@ -1394,6 +1404,40 @@ impl App {
         }
 
         window::set_pin_bottom(layer == Layer::Desktop && !self.edit && !self.raised);
+        self.sync_sampler();
+    }
+
+    /// Tells the sampler thread what to read, or to stop while no System
+    /// widget is on screen: nothing is read, and nothing wakes the app.
+    fn sync_sampler(&mut self) {
+        let on = self
+            .hosts
+            .iter()
+            .any(|h| h.kind == Kind::Stats && h.visible && !h.paused);
+        let plan = on.then(|| self.cfg.stats.wanted());
+        if plan == self.sampler_plan {
+            return;
+        }
+        // A send fails only when the thread is gone, as with the media thread.
+        let _ = self.sampler.send(match &plan {
+            Some(wanted) => Control::Run(wanted.clone()),
+            None => Control::Pause,
+        });
+        if plan.is_none() {
+            self.stats = Sample::default();
+        }
+        self.sampler_plan = plan;
+    }
+
+    /// A new reading arrived from the sampler thread.
+    fn stats_changed(&mut self) {
+        let Ok(new) = self.stats_shared.lock().map(|sample| sample.clone()) else {
+            return;
+        };
+        self.stats = new;
+        for host in self.hosts.iter_mut().filter(|h| h.kind == Kind::Stats) {
+            host.due = Due::Now;
+        }
     }
 }
 

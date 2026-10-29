@@ -28,6 +28,7 @@ pub const WM_APP_LYRICS: u32 = WM_APP + 2;
 pub const WM_APP_AUDIO: u32 = WM_APP + 3;
 pub const WM_APP_TRAY: u32 = WM_APP + 4;
 pub const WM_APP_SHOW_SETTINGS: u32 = WM_APP + 5;
+pub const WM_APP_STATS: u32 = WM_APP + 6;
 /// The `windows` crate keeps this one under the Controls feature.
 const WM_MOUSELEAVE: u32 = 0x02A3;
 
@@ -57,6 +58,7 @@ pub enum Event {
     Media,
     Lyrics,
     Audio,
+    Stats,
     ShowSettings,
     TaskbarCreated,
     /// Resolution, DPI or work area changed.
@@ -194,6 +196,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         WM_APP_MEDIA => push(Event::Media),
         WM_APP_LYRICS => push(Event::Lyrics),
         WM_APP_AUDIO => push(Event::Audio),
+        WM_APP_STATS => push(Event::Stats),
         WM_APP_SHOW_SETTINGS => push(Event::ShowSettings),
         WM_APP_TRAY => push(Event::Tray(lp.0 as u32)),
         WM_HOTKEY => push(Event::Hotkey(wp.0 as i32)),

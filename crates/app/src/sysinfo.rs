@@ -2,6 +2,8 @@
 //! network and battery. Every reading that fails is `None`, with one log line
 //! per kind of reading rather than one per tick.
 
+use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use inlay_core::config::StatReading;
@@ -24,7 +26,8 @@ use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTAT
 use windows::Win32::System::Threading::GetSystemTimes;
 use windows::core::{HSTRING, PCWSTR, w};
 
-use crate::log;
+use crate::window::WM_APP_STATS;
+use crate::{Notify, log};
 
 /// How long drive and battery readings are kept before they are read again.
 const SLOW: Duration = Duration::from_secs(30);
@@ -43,6 +46,63 @@ pub fn init_thread() {
     if let Err(error) = unsafe { SetThreadErrorMode(SEM_FAILCRITICALERRORS, None) } {
         log(&format!("system widget: error mode not set: {error}"));
     }
+}
+
+/// What the app tells the sampling thread.
+pub enum Control {
+    /// Read these, starting from fresh baselines.
+    Run(Wanted),
+    /// Read nothing until told otherwise.
+    Pause,
+}
+
+/// How soon after a start the first rates are worked out.
+const FIRST: Duration = Duration::from_millis(250);
+
+/// Starts the sampling thread. It posts `WM_APP_STATS` after storing each
+/// sample in `shared`, and posts nothing while paused.
+pub fn spawn(shared: Arc<Mutex<Sample>>, notify: Notify) -> Sender<Control> {
+    let (tx, rx) = channel();
+    std::thread::spawn(move || {
+        init_thread();
+        // The sampler holds a handle that cannot leave the thread that made
+        // it, so it is built here, and again on every start, which also keeps
+        // the time spent paused out of the first rates.
+        let mut running: Option<(Wanted, Sampler, Instant)> = None;
+        loop {
+            let message = match &running {
+                None => rx.recv().map_err(|_| RecvTimeoutError::Disconnected),
+                Some((_, _, next)) => {
+                    rx.recv_timeout(next.saturating_duration_since(Instant::now()))
+                }
+            };
+            match message {
+                Ok(Control::Run(wanted)) => {
+                    let sampler = Sampler::new(&wanted);
+                    running = Some((wanted, sampler, Instant::now() + FIRST));
+                }
+                Ok(Control::Pause) => {
+                    running = None;
+                    if let Ok(mut guard) = shared.lock() {
+                        *guard = Sample::default();
+                    }
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    if let Some((wanted, sampler, next)) = &mut running {
+                        let sample = sampler.sample(wanted);
+                        if let Ok(mut guard) = shared.lock() {
+                            *guard = sample;
+                        }
+                        *next =
+                            Instant::now() + Duration::from_millis(u64::from(wanted.interval_ms));
+                        notify.post(WM_APP_STATS);
+                    }
+                }
+                Err(RecvTimeoutError::Disconnected) => return,
+            }
+        }
+    });
+    tx
 }
 
 /// Keeps what one reading needs from the one before: the processor and
