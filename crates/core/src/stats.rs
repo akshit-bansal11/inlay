@@ -4,7 +4,10 @@
 
 use std::collections::HashMap;
 
-use crate::config::{NetUnits, StatReading, StatsCfg, ValueFormat};
+use crate::config::{
+    NetUnits, StatReading, StatsCfg, StatsMeter, StatsNames, StatsOrientation, StatsStructure,
+    ValueFormat,
+};
 
 /// Something used out of a total, in bytes.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -339,6 +342,360 @@ impl StatsCfg {
     }
 }
 
+/// One name and value, with how full its meter is.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Row {
+    pub name: String,
+    pub value: String,
+    /// 0 to 1, in steps of 0.01 so a meter only redraws when it visibly moves.
+    pub fraction: f32,
+    pub warn: bool,
+}
+
+/// One reading on screen: the disks reading has a row per drive.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Item {
+    pub id: StatReading,
+    pub color: String,
+    pub rows: Vec<Row>,
+}
+
+fn quantize(fraction: f32) -> f32 {
+    if fraction.is_finite() {
+        (fraction.clamp(0.0, 1.0) * 100.0).round() / 100.0
+    } else {
+        0.0
+    }
+}
+
+fn missing(name: &str) -> Row {
+    Row {
+        name: name.to_owned(),
+        value: "–".to_owned(),
+        fraction: 0.0,
+        warn: false,
+    }
+}
+
+fn percent_row(id: StatReading, name: &str, percent: f32, threshold: f32) -> Row {
+    Row {
+        name: name.to_owned(),
+        value: format_percent(percent),
+        fraction: quantize(percent / 100.0),
+        warn: warns(id, percent, threshold, false),
+    }
+}
+
+fn usage_row(
+    id: StatReading,
+    name: &str,
+    usage: Usage,
+    format: ValueFormat,
+    threshold: f32,
+) -> Row {
+    let percent = usage.percent();
+    Row {
+        name: name.to_owned(),
+        value: match format {
+            ValueFormat::Percent => format_percent(percent),
+            ValueFormat::Amount => format_amount(usage.used, usage.total),
+        },
+        fraction: quantize(percent / 100.0),
+        warn: warns(id, percent, threshold, false),
+    }
+}
+
+/// The readings to draw, in order, for one sample.
+pub fn items(cfg: &StatsCfg, sample: &Sample, peaks: &mut Peaks) -> Vec<Item> {
+    let mut out = Vec::new();
+    for &id in &cfg.order {
+        let rd = cfg.reading(id);
+        if !rd.show {
+            continue;
+        }
+        let rows = match id {
+            StatReading::Cpu => vec![sample.cpu.map_or_else(
+                || missing(&rd.name),
+                |p| percent_row(id, &rd.name, p, rd.warn),
+            )],
+            StatReading::Gpu => vec![sample.gpu.map_or_else(
+                || missing(&rd.name),
+                |p| percent_row(id, &rd.name, p, rd.warn),
+            )],
+            StatReading::Ram | StatReading::Vram => {
+                let usage = if id == StatReading::Ram {
+                    sample.ram
+                } else {
+                    sample.vram
+                };
+                vec![usage.map_or_else(
+                    || missing(&rd.name),
+                    |u| usage_row(id, &rd.name, u, rd.value, rd.warn),
+                )]
+            }
+            StatReading::Disks => sample
+                .disks
+                .iter()
+                .map(|d| {
+                    let usage = Usage {
+                        used: d.used,
+                        total: d.total,
+                    };
+                    usage_row(
+                        id,
+                        &drive_name(&rd.name, d.letter),
+                        usage,
+                        rd.value,
+                        rd.warn,
+                    )
+                })
+                .collect(),
+            StatReading::Down | StatReading::Up => {
+                let (rate, peak) = if id == StatReading::Down {
+                    (sample.down, &mut peaks.down)
+                } else {
+                    (sample.up, &mut peaks.up)
+                };
+                vec![rate.map_or_else(
+                    || missing(&rd.name),
+                    |r| {
+                        let fraction = quantize(peak.fraction(r, rd.max));
+                        Row {
+                            name: rd.name.clone(),
+                            value: format_rate(r, cfg.net_units),
+                            fraction,
+                            warn: warns(id, fraction * 100.0, rd.warn, false),
+                        }
+                    },
+                )]
+            }
+            StatReading::Battery => sample
+                .battery
+                .map(|b| Row {
+                    name: rd.name.clone(),
+                    value: format_percent(b.percent),
+                    fraction: quantize(b.percent / 100.0),
+                    warn: warns(id, b.percent, rd.warn, b.charging),
+                })
+                .into_iter()
+                .collect(),
+        };
+        if !rows.is_empty() {
+            out.push(Item {
+                id,
+                color: rd.color.clone(),
+                rows,
+            });
+        }
+    }
+    out
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Size {
+    pub w: f32,
+    pub h: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Grid {
+    pub structure: StatsStructure,
+    pub orientation: StatsOrientation,
+    pub columns: u32,
+    pub gap: f32,
+    pub padding: f32,
+}
+
+/// Where each element goes and how much room it has, plus the whole size.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Laid {
+    pub at: Vec<(f32, f32)>,
+    pub cell: Vec<Size>,
+    pub size: Size,
+}
+
+/// Places elements of the given sizes. Outside the free structure the first
+/// one is always at `(padding, padding)`; `free` holds the positions the free
+/// structure uses.
+pub fn layout(grid: &Grid, sizes: &[Size], free: &[(f32, f32)]) -> Laid {
+    let (p, gap) = (grid.padding, grid.gap);
+    let (widest, tallest) = sizes
+        .iter()
+        .fold((0.0f32, 0.0f32), |(w, h), s| (w.max(s.w), h.max(s.h)));
+    let mut at = Vec::with_capacity(sizes.len());
+    let cell: Vec<Size>;
+    match grid.structure {
+        StatsStructure::Strip => {
+            cell = sizes.to_vec();
+            let mut cursor = p;
+            for s in sizes {
+                match grid.orientation {
+                    StatsOrientation::Across => {
+                        at.push((cursor, p));
+                        cursor += s.w + gap;
+                    }
+                    StatsOrientation::Down => {
+                        at.push((p, cursor));
+                        cursor += s.h + gap;
+                    }
+                }
+            }
+        }
+        StatsStructure::List => {
+            cell = sizes.iter().map(|s| Size { w: widest, h: s.h }).collect();
+            let mut y = p;
+            for s in sizes {
+                at.push((p, y));
+                y += s.h + gap;
+            }
+        }
+        StatsStructure::Tiles => {
+            cell = sizes
+                .iter()
+                .map(|_| Size {
+                    w: widest,
+                    h: tallest,
+                })
+                .collect();
+            let c = grid.columns.max(1) as usize;
+            for i in 0..sizes.len() {
+                let (col, row) = match grid.orientation {
+                    StatsOrientation::Across => (i % c, i / c),
+                    StatsOrientation::Down => (i / c, i % c),
+                };
+                at.push((
+                    p + col as f32 * (widest + gap),
+                    p + row as f32 * (tallest + gap),
+                ));
+            }
+        }
+        StatsStructure::Free => {
+            cell = sizes.to_vec();
+            for i in 0..sizes.len() {
+                at.push(free.get(i).copied().unwrap_or((p, p)));
+            }
+        }
+    }
+    let size = if sizes.is_empty() {
+        Size {
+            w: 2.0 * p,
+            h: 2.0 * p,
+        }
+    } else {
+        let (mut w, mut h) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+        for (a, c) in at.iter().zip(&cell) {
+            w = w.max(a.0 + c.w);
+            h = h.max(a.1 + c.h);
+        }
+        Size { w: w + p, h: h + p }
+    };
+    Laid { at, cell, size }
+}
+
+/// The measured text of one element.
+#[derive(Debug, Clone, Copy)]
+pub struct Block {
+    pub name: Size,
+    pub value: Size,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MeterSpec {
+    pub kind: StatsMeter,
+    pub length: f32,
+    pub thickness: f32,
+    pub ring: f32,
+}
+
+/// An element's parts, placed from its own top-left corner.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Composed {
+    pub size: Size,
+    pub name: (f32, f32),
+    pub value: (f32, f32),
+    /// x, y, width, height.
+    pub meter: Option<[f32; 4]>,
+}
+
+/// Space between the parts of one element.
+pub const INNER_GAP: f32 = 6.0;
+
+/// Arranges name, value and meter into one element. Side by side parts are
+/// centred on the taller one. A bar goes below the text, a ring to its left.
+pub fn compose(block: Block, names: StatsNames, meter: MeterSpec) -> Composed {
+    let (n, v) = (block.name, block.value);
+    let (text, name, value) = match names {
+        StatsNames::Hidden => (v, (0.0, 0.0), (0.0, 0.0)),
+        StatsNames::Above => (
+            Size {
+                w: n.w.max(v.w),
+                h: n.h + v.h,
+            },
+            (0.0, 0.0),
+            (0.0, n.h),
+        ),
+        StatsNames::Before | StatsNames::After => {
+            let h = n.h.max(v.h);
+            let (first, second) = if names == StatsNames::Before {
+                (n, v)
+            } else {
+                (v, n)
+            };
+            let second_x = first.w + INNER_GAP;
+            let first_pos = (0.0, (h - first.h) / 2.0);
+            let second_pos = (second_x, (h - second.h) / 2.0);
+            let (name, value) = if names == StatsNames::Before {
+                (first_pos, second_pos)
+            } else {
+                (second_pos, first_pos)
+            };
+            (
+                Size {
+                    w: second_x + second.w,
+                    h,
+                },
+                name,
+                value,
+            )
+        }
+    };
+    match meter.kind {
+        StatsMeter::None => Composed {
+            size: text,
+            name,
+            value,
+            meter: None,
+        },
+        StatsMeter::Bar => {
+            let length = if meter.length > 0.0 {
+                meter.length
+            } else {
+                text.w
+            };
+            Composed {
+                size: Size {
+                    w: text.w.max(length),
+                    h: text.h + INNER_GAP + meter.thickness,
+                },
+                name,
+                value,
+                meter: Some([0.0, text.h + INNER_GAP, length, meter.thickness]),
+            }
+        }
+        StatsMeter::Ring => {
+            let ring = meter.ring;
+            let h = ring.max(text.h);
+            let (dx, dy) = (ring + INNER_GAP, (h - text.h) / 2.0);
+            Composed {
+                size: Size { w: dx + text.w, h },
+                name: (name.0 + dx, name.1 + dy),
+                value: (value.0 + dx, value.1 + dy),
+                meter: Some([0.0, (h - ring) / 2.0, ring, ring]),
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -551,5 +908,313 @@ mod tests {
         cfg.vram.show = false;
         assert!(!cfg.wanted().gpu());
         assert!(Wanted::all().gpu());
+    }
+
+    fn sample() -> Sample {
+        Sample {
+            cpu: Some(58.4),
+            ram: Some(Usage {
+                used: (9.3 * GIB) as u64,
+                total: (16.0 * GIB) as u64,
+            }),
+            gpu: None,
+            vram: None,
+            disks: vec![
+                Disk {
+                    letter: 'C',
+                    used: (100.0 * GIB) as u64,
+                    total: (200.0 * GIB) as u64,
+                },
+                Disk {
+                    letter: 'D',
+                    used: (190.0 * GIB) as u64,
+                    total: (200.0 * GIB) as u64,
+                },
+            ],
+            down: Some(12_300_000.0),
+            up: Some(0.0),
+            battery: Some(Battery {
+                percent: 15.0,
+                charging: true,
+            }),
+        }
+    }
+
+    fn item(items: &[Item], id: StatReading) -> Option<&Item> {
+        items.iter().find(|i| i.id == id)
+    }
+
+    #[test]
+    fn a_sample_becomes_rows() {
+        let mut cfg = StatsCfg::default();
+        let mut peaks = Peaks::default();
+        let out = items(&cfg, &sample(), &mut peaks);
+        assert_eq!(out.len(), 8);
+
+        let cpu = &item(&out, StatReading::Cpu).unwrap().rows[0];
+        assert_eq!((cpu.name.as_str(), cpu.value.as_str()), ("CPU", "58%"));
+        assert_eq!(cpu.fraction, 0.58);
+        assert!(!cpu.warn);
+
+        assert_eq!(item(&out, StatReading::Ram).unwrap().rows[0].value, "58%");
+        let gpu = &item(&out, StatReading::Gpu).unwrap().rows[0];
+        assert_eq!(
+            (gpu.value.as_str(), gpu.fraction, gpu.warn),
+            ("–", 0.0, false)
+        );
+
+        let disks = &item(&out, StatReading::Disks).unwrap().rows;
+        assert_eq!(disks.len(), 2);
+        assert_eq!(disks[0].name, "C:");
+        assert_eq!(disks[1].name, "D:");
+        assert!(!disks[0].warn);
+        assert!(disks[1].warn);
+
+        let down = &item(&out, StatReading::Down).unwrap().rows[0];
+        assert_eq!(down.value, "12.3 MB/s");
+        assert_eq!(down.fraction, 1.0);
+        assert!(!down.warn);
+
+        // Charging, so the low battery is not a warning.
+        let battery = &item(&out, StatReading::Battery).unwrap().rows[0];
+        assert_eq!(battery.value, "15%");
+        assert!(!battery.warn);
+
+        cfg.ram.value = ValueFormat::Amount;
+        cfg.net_units = NetUnits::Bits;
+        let mut unplugged = sample();
+        unplugged.battery = Some(Battery {
+            percent: 15.0,
+            charging: false,
+        });
+        unplugged.cpu = Some(95.0);
+        let out = items(&cfg, &unplugged, &mut Peaks::default());
+        assert_eq!(
+            item(&out, StatReading::Ram).unwrap().rows[0].value,
+            "9.3 / 16 GB"
+        );
+        assert_eq!(
+            item(&out, StatReading::Down).unwrap().rows[0].value,
+            "98.4 Mbps"
+        );
+        assert!(item(&out, StatReading::Battery).unwrap().rows[0].warn);
+        assert!(item(&out, StatReading::Cpu).unwrap().rows[0].warn);
+    }
+
+    #[test]
+    fn missing_hardware_leaves_its_reading_out() {
+        let mut s = sample();
+        s.battery = None;
+        s.disks.clear();
+        let out = items(&StatsCfg::default(), &s, &mut Peaks::default());
+        assert!(item(&out, StatReading::Battery).is_none());
+        assert!(item(&out, StatReading::Disks).is_none());
+        assert_eq!(out.len(), 6);
+
+        let mut cfg = StatsCfg::default();
+        cfg.cpu.show = false;
+        cfg.cpu.color = "accent".to_owned();
+        cfg.ram.color = "#FF0000".to_owned();
+        let out = items(&cfg, &sample(), &mut Peaks::default());
+        assert!(item(&out, StatReading::Cpu).is_none());
+        assert_eq!(item(&out, StatReading::Ram).unwrap().color, "#FF0000");
+    }
+
+    fn grid(structure: StatsStructure, orientation: StatsOrientation) -> Grid {
+        Grid {
+            structure,
+            orientation,
+            columns: 3,
+            gap: 2.0,
+            padding: 1.0,
+        }
+    }
+
+    fn sz(w: f32, h: f32) -> Size {
+        Size { w, h }
+    }
+
+    #[test]
+    fn a_strip_runs_across_or_down() {
+        let sizes = [sz(10.0, 4.0), sz(20.0, 6.0), sz(30.0, 8.0)];
+        let across = layout(
+            &grid(StatsStructure::Strip, StatsOrientation::Across),
+            &sizes,
+            &[],
+        );
+        assert_eq!(across.at, [(1.0, 1.0), (13.0, 1.0), (35.0, 1.0)]);
+        assert_eq!(across.cell, sizes);
+        assert_eq!(across.size, sz(66.0, 10.0));
+
+        let down = layout(
+            &grid(StatsStructure::Strip, StatsOrientation::Down),
+            &sizes,
+            &[],
+        );
+        assert_eq!(down.at, [(1.0, 1.0), (1.0, 7.0), (1.0, 15.0)]);
+        assert_eq!(down.size, sz(32.0, 24.0));
+    }
+
+    #[test]
+    fn a_list_is_one_column_as_wide_as_its_widest() {
+        let sizes = [sz(10.0, 4.0), sz(20.0, 6.0), sz(30.0, 8.0)];
+        for orientation in [StatsOrientation::Across, StatsOrientation::Down] {
+            let list = layout(&grid(StatsStructure::List, orientation), &sizes, &[]);
+            assert_eq!(list.at, [(1.0, 1.0), (1.0, 7.0), (1.0, 15.0)]);
+            assert_eq!(list.cell, [sz(30.0, 4.0), sz(30.0, 6.0), sz(30.0, 8.0)]);
+            assert_eq!(list.size, sz(32.0, 24.0));
+        }
+    }
+
+    #[test]
+    fn tiles_fill_rows_or_columns_first() {
+        let mut sizes = vec![sz(10.0, 4.0); 7];
+        sizes[0] = sz(12.0, 5.0);
+        let across = layout(
+            &grid(StatsStructure::Tiles, StatsOrientation::Across),
+            &sizes,
+            &[],
+        );
+        assert_eq!(across.cell, vec![sz(12.0, 5.0); 7]);
+        assert_eq!(across.at[3], (1.0, 8.0));
+        assert_eq!(across.at[6], (1.0, 15.0));
+        assert_eq!(across.size, sz(42.0, 21.0));
+
+        let down = layout(
+            &grid(StatsStructure::Tiles, StatsOrientation::Down),
+            &sizes,
+            &[],
+        );
+        assert_eq!(down.at[3], (15.0, 1.0));
+        assert_eq!(down.at[6], (29.0, 1.0));
+        assert_eq!(down.size, sz(42.0, 21.0));
+    }
+
+    #[test]
+    fn the_free_structure_uses_the_given_spots() {
+        let sizes = [sz(10.0, 4.0), sz(20.0, 6.0)];
+        let free = layout(
+            &grid(StatsStructure::Free, StatsOrientation::Across),
+            &sizes,
+            &[(5.0, 6.0)],
+        );
+        assert_eq!(free.at, [(5.0, 6.0), (1.0, 1.0)]);
+        assert_eq!(free.cell, sizes);
+        assert_eq!(free.size, sz(22.0, 13.0));
+    }
+
+    #[test]
+    fn nothing_and_one_thing_lay_out() {
+        let g = grid(StatsStructure::Strip, StatsOrientation::Across);
+        let none = layout(&g, &[], &[]);
+        assert!(none.at.is_empty());
+        assert_eq!(none.size, sz(2.0, 2.0));
+        let one = layout(&g, &[sz(10.0, 4.0)], &[]);
+        assert_eq!(one.at, [(1.0, 1.0)]);
+        assert_eq!(one.size, sz(12.0, 6.0));
+    }
+
+    #[test]
+    fn the_first_element_sits_at_the_padding_in_every_fixed_structure() {
+        let sizes = [sz(10.0, 4.0), sz(20.0, 6.0), sz(30.0, 8.0)];
+        for structure in [
+            StatsStructure::Strip,
+            StatsStructure::List,
+            StatsStructure::Tiles,
+        ] {
+            for orientation in [StatsOrientation::Across, StatsOrientation::Down] {
+                let laid = layout(&grid(structure, orientation), &sizes, &[]);
+                assert_eq!(laid.at[0], (1.0, 1.0), "{structure:?} {orientation:?}");
+            }
+        }
+    }
+
+    const BLOCK: Block = Block {
+        name: Size { w: 10.0, h: 6.0 },
+        value: Size { w: 20.0, h: 10.0 },
+    };
+
+    fn plain() -> MeterSpec {
+        MeterSpec {
+            kind: StatsMeter::None,
+            length: 0.0,
+            thickness: 4.0,
+            ring: 30.0,
+        }
+    }
+
+    #[test]
+    fn name_and_value_sit_side_by_side_or_stacked() {
+        let before = compose(BLOCK, StatsNames::Before, plain());
+        assert_eq!(
+            before,
+            Composed {
+                size: sz(36.0, 10.0),
+                name: (0.0, 2.0),
+                value: (16.0, 0.0),
+                meter: None
+            }
+        );
+        let after = compose(BLOCK, StatsNames::After, plain());
+        assert_eq!(
+            after,
+            Composed {
+                size: sz(36.0, 10.0),
+                name: (26.0, 2.0),
+                value: (0.0, 0.0),
+                meter: None
+            }
+        );
+        let above = compose(BLOCK, StatsNames::Above, plain());
+        assert_eq!(
+            above,
+            Composed {
+                size: sz(20.0, 16.0),
+                name: (0.0, 0.0),
+                value: (0.0, 6.0),
+                meter: None
+            }
+        );
+        let hidden = compose(BLOCK, StatsNames::Hidden, plain());
+        assert_eq!(hidden.size, sz(20.0, 10.0));
+        assert_eq!(hidden.value, (0.0, 0.0));
+    }
+
+    #[test]
+    fn a_bar_goes_below_the_text() {
+        let bar = |length| MeterSpec {
+            kind: StatsMeter::Bar,
+            length,
+            ..plain()
+        };
+        let own = compose(BLOCK, StatsNames::Before, bar(0.0));
+        assert_eq!(own.meter, Some([0.0, 16.0, 36.0, 4.0]));
+        assert_eq!(own.size, sz(36.0, 20.0));
+        let long = compose(BLOCK, StatsNames::Before, bar(50.0));
+        assert_eq!(long.meter, Some([0.0, 16.0, 50.0, 4.0]));
+        assert_eq!(long.size, sz(50.0, 20.0));
+    }
+
+    #[test]
+    fn a_ring_goes_left_of_the_text_and_centres_against_it() {
+        let ring = |ring| MeterSpec {
+            kind: StatsMeter::Ring,
+            ring,
+            ..plain()
+        };
+        let big = compose(BLOCK, StatsNames::Before, ring(30.0));
+        assert_eq!(
+            big,
+            Composed {
+                size: sz(72.0, 30.0),
+                name: (36.0, 12.0),
+                value: (52.0, 10.0),
+                meter: Some([0.0, 0.0, 30.0, 30.0])
+            }
+        );
+        let small = compose(BLOCK, StatsNames::Before, ring(4.0));
+        assert_eq!(small.size, sz(46.0, 10.0));
+        assert_eq!(small.meter, Some([0.0, 3.0, 4.0, 4.0]));
+        assert_eq!(small.value, (26.0, 0.0));
     }
 }
