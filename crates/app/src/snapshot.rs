@@ -269,12 +269,14 @@ fn scene(
     audio: &Audio,
 ) -> Result<()> {
     let palette = Palette::new(cfg);
+    let stats = inlay_core::stats::Sample::default();
     let ctx_at = |now_ms: f64| Ctx {
         cfg,
         media,
         lyrics,
         lyrics_gen: 1,
         audio,
+        stats: &stats,
         now_ms,
         time: LocalTime {
             year: 2026,
