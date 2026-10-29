@@ -519,9 +519,7 @@ pub struct Laid {
 /// structure uses.
 pub fn layout(grid: &Grid, sizes: &[Size], free: &[(f32, f32)]) -> Laid {
     let (p, gap) = (grid.padding, grid.gap);
-    let (widest, tallest) = sizes
-        .iter()
-        .fold((0.0f32, 0.0f32), |(w, h), s| (w.max(s.w), h.max(s.h)));
+    let widest = sizes.iter().fold(0.0f32, |w, s| w.max(s.w));
     let mut at = Vec::with_capacity(sizes.len());
     let cell: Vec<Size>;
     match grid.structure {
@@ -550,24 +548,42 @@ pub fn layout(grid: &Grid, sizes: &[Size], free: &[(f32, f32)]) -> Laid {
             }
         }
         StatsStructure::Tiles => {
-            cell = sizes
-                .iter()
-                .map(|_| Size {
-                    w: widest,
-                    h: tallest,
-                })
-                .collect();
             let c = grid.columns.max(1) as usize;
-            for i in 0..sizes.len() {
-                let (col, row) = match grid.orientation {
+            let slots: Vec<(usize, usize)> = (0..sizes.len())
+                .map(|i| match grid.orientation {
                     StatsOrientation::Across => (i % c, i / c),
                     StatsOrientation::Down => (i / c, i % c),
-                };
-                at.push((
-                    p + col as f32 * (widest + gap),
-                    p + row as f32 * (tallest + gap),
-                ));
+                })
+                .collect();
+            let mut col_w: Vec<f32> = Vec::new();
+            let mut row_h: Vec<f32> = Vec::new();
+            for (&(col, row), s) in slots.iter().zip(sizes) {
+                col_w.resize(col_w.len().max(col + 1), 0.0);
+                row_h.resize(row_h.len().max(row + 1), 0.0);
+                col_w[col] = col_w[col].max(s.w);
+                row_h[row] = row_h[row].max(s.h);
             }
+            // Each column starts where the one before it ends, plus the gap.
+            let starts = |sizes: &[f32]| -> Vec<f32> {
+                let mut at = p;
+                sizes
+                    .iter()
+                    .map(|s| {
+                        let start = at;
+                        at += s + gap;
+                        start
+                    })
+                    .collect()
+            };
+            let (col_x, row_y) = (starts(&col_w), starts(&row_h));
+            cell = slots
+                .iter()
+                .map(|&(col, row)| Size {
+                    w: col_w[col],
+                    h: row_h[row],
+                })
+                .collect();
+            at.extend(slots.iter().map(|&(col, row)| (col_x[col], row_y[row])));
         }
         StatsStructure::Free => {
             cell = sizes.to_vec();
@@ -1075,10 +1091,11 @@ mod tests {
             &sizes,
             &[],
         );
-        assert_eq!(across.cell, vec![sz(12.0, 5.0); 7]);
+        assert_eq!(across.cell[1], sz(10.0, 5.0));
+        assert_eq!(across.cell[3], sz(12.0, 4.0));
         assert_eq!(across.at[3], (1.0, 8.0));
-        assert_eq!(across.at[6], (1.0, 15.0));
-        assert_eq!(across.size, sz(42.0, 21.0));
+        assert_eq!(across.at[6], (1.0, 14.0));
+        assert_eq!(across.size, sz(38.0, 19.0));
 
         let down = layout(
             &grid(StatsStructure::Tiles, StatsOrientation::Down),
@@ -1086,8 +1103,23 @@ mod tests {
             &[],
         );
         assert_eq!(down.at[3], (15.0, 1.0));
-        assert_eq!(down.at[6], (29.0, 1.0));
-        assert_eq!(down.size, sz(42.0, 21.0));
+        assert_eq!(down.at[6], (27.0, 1.0));
+        assert_eq!(down.size, sz(38.0, 19.0));
+    }
+
+    #[test]
+    fn a_tall_tile_only_lengthens_its_own_row() {
+        let mut sizes = vec![sz(10.0, 4.0); 6];
+        sizes[3] = sz(10.0, 20.0);
+        let laid = layout(
+            &grid(StatsStructure::Tiles, StatsOrientation::Across),
+            &sizes,
+            &[],
+        );
+        assert_eq!(laid.cell[0], sz(10.0, 4.0));
+        assert_eq!(laid.cell[5], sz(10.0, 20.0));
+        assert_eq!(laid.at[3], (1.0, 7.0));
+        assert_eq!(laid.size, sz(36.0, 28.0));
     }
 
     #[test]
