@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   // canonical link is each page's own, so a future page never inherits "/" by accident.
   title: TITLE,
   description:
-    "Inlay sets four live widgets into the desktop on Windows 11, with a preview for macOS and Linux: a clock, and a spectrum visualizer, time-synced lyrics and a now-playing player that follow Spotify. One small native app, a light alternative to Rainmeter. No Spotify login, no telemetry. MIT.",
+    "Inlay sets five live widgets into the desktop on Windows 11, with a preview for macOS and Linux: a clock, a spectrum visualizer, time-synced lyrics and a now-playing player that follow Spotify, and a System widget for CPU, RAM, GPU, drives, network and battery. One small native app, a light alternative to Rainmeter. No Spotify login, no telemetry. MIT.",
   applicationName: "Inlay",
   authors: [{ name: "akshit-bansal11" }],
   openGraph: {

@@ -4,7 +4,7 @@
 
 <p align="center"><b>Live widgets, set into your Windows desktop.</b></p>
 
-<p align="center">A clock, a visualizer, synced lyrics and a player, set into your desktop by one small native app. A light alternative to Rainmeter.</p>
+<p align="center">A clock, a visualizer, synced lyrics, a player and system stats, set into your desktop by one small native app. A light alternative to Rainmeter.</p>
 
 <p align="center">Needs Windows 11 and the Spotify desktop app on the same PC. A preview for macOS and Linux is below.</p>
 
@@ -25,7 +25,7 @@
 
 ## What it is
 
-Inlay sets four live widgets into the desktop. They sit on the desktop under your windows, and they draw over the desktop icons. They aren't windows you manage. They're part of the desktop.
+Inlay sets five live widgets into the desktop. They sit on the desktop under your windows, and they draw over the desktop icons. They aren't windows you manage. They're part of the desktop.
 
 | Widget | What it shows |
 | --- | --- |
@@ -33,8 +33,9 @@ Inlay sets four live widgets into the desktop. They sit on the desktop under you
 | **Visualizer** | A spectrum of Spotify's audio alone, not your games or calls. Bars, mirrored bars or a wave. |
 | **Lyrics** | Time-synced lyrics, line by line from LRCLIB. With word timing turned on, they light up or fill word by word where a server has timed words. |
 | **Player** | Album art, title, artist, a progress bar you can click to seek, and previous, play/pause and next. |
+| **System** | CPU, RAM, GPU, video memory, each fixed and removable drive, network speed and battery. A strip, list, grid of tiles, or each reading placed freely; plain numbers, bars or rings; a warning colour past a threshold you set. |
 
-The visualizer, lyrics and player follow whatever Spotify plays. There's no Spotify login and no client ID: the track and the controls come from Windows itself, so a free account works.
+The visualizer, lyrics and player follow whatever Spotify plays. The System widget reads the PC itself. There's no Spotify login and no client ID: the track and the controls come from Windows itself, so a free account works.
 
 ## Why it stays light
 
@@ -43,6 +44,7 @@ A widget is redrawn only when something on it changes. Nothing is drawn while it
 - **One native process.** Rust and Direct2D, with no webview, no runtime and no skin interpreter.
 - **Event-driven.** The clock wakes once a minute and the player once a second. In complete mode the lyrics widget wakes at each new line; in progress mode, or with word timing on, it redraws every frame while a line is being sung. The visualizer runs only while there's sound.
 - **Nothing hidden is drawn.** A widget under a maximized or fullscreen window stops entirely.
+- **The System sampler sleeps when nothing shows it.** It reads the counters once per refresh interval (500 to 5000 ms; 1000 by default). It runs only while the System widget is shown and not covered, and the widget is redrawn only when a shown reading's text changes.
 - **The low-power GPU.** On a laptop with two GPUs, it uses the integrated one.
 
 Memory use was measured once at about 54 MB. How it was measured wasn't recorded, so treat it as a rough figure.
@@ -67,6 +69,7 @@ New in 2.1.0, and not yet tried on real machines beyond CI. It draws the same fo
 
 - The settings panel: edit `config.toml` instead. It reloads within 2 seconds.
 - Edit-layout dragging, hotkeys and start at login.
+- The System widget (CPU, RAM, GPU, drives, network and battery).
 - Vertical or sideways text, letter spacing, and per-label font weights beyond the face found.
 - Wayland doesn't let apps place their windows, so positions may be ignored there. On GNOME, widgets can't stay below other windows.
 - On Linux each widget may show in the taskbar and Alt-Tab; there is no way to hide them there. On macOS they may show in Mission Control.
@@ -97,7 +100,7 @@ Inlay lives in the notification area. **Double-click** its icon for settings. **
 | Hotkey | Does |
 | --- | --- |
 | `Ctrl+Alt+S` | Open settings |
-| `Ctrl+Alt+E` | Edit layout: drag any element of the clock or player on its own, or drag the lyrics or visualizer |
+| `Ctrl+Alt+E` | Edit layout: drag any element of the clock or player on its own, a System reading, or drag the lyrics or visualizer |
 | `Ctrl+Alt+H` | Hide or show every widget |
 | `Ctrl+Alt+Up` / `Down` | Show lyrics 100 ms earlier / later |
 
@@ -105,7 +108,7 @@ Hotkeys can be turned off in settings.
 
 ### Edit layout
 
-The clock and the player have no box. Each of their elements (the day, time and date, and the player's art, title, artist, each button, the bar and both times) can be dragged anywhere on its own. The one under the pointer is outlined, and nothing else is drawn. Shift+click selects several, which then move together. The Player tab has two ready-made arrangements to start from.
+The clock and the player have no box. Each of their elements (the day, time and date, and the player's art, title, artist, each button, the bar and both times) can be dragged anywhere on its own. The one under the pointer is outlined, and nothing else is drawn. Shift+click selects several, which then move together. Each System reading can be dragged the same way; dragging one switches that widget to the free structure. The Player tab has two ready-made arrangements to start from.
 
 ### Settings
 
@@ -115,7 +118,8 @@ The settings panel has a page for each widget, split into its parts. Every part 
 - **Visualizer:** bar width and gap stay fixed whatever the number of bars; bars that don't fit are left out. It can turn a quarter to run down the side of the screen.
 - **Player:** the bar's length, thickness and colour, the buttons' size and colour, and the art's size and corner rounding. Titles show the song's name alone, without the version, credits or film Spotify appends, and are never cut short.
 - **Colour:** every colour setting has a picker, with a colour square, a hue bar and a hex field.
-- **Layer:** widgets can sit on the desktop under your windows (the default), behave like a normal window, or stay on top of everything.
+- **System:** the structure (strip, list, tiles or free), orientation, columns, meters (none, bar or ring), where each name goes, and the refresh rate. For each reading: whether it shows, its name, colour, warning level, percent or amount, and maximum. Also the order of readings, network units (bytes or bits), opacity, gap and padding. Free text, such as the adapter and drive names, is set in `config.toml`.
+- **Layer:** widgets can sit on the desktop under your windows (the default), behave like a normal window, or stay on top of everything. The System widget has its own `stats.layer`; the panel's Stay above windows switch sets only that widget to `top`.
 
 ### The config file
 
@@ -143,10 +147,11 @@ Inlay has no console, so its diagnostics write to a file. In a terminal, with Sp
 Inlay-<version>.exe --probe > probe.txt
 ```
 
-That records, for eight seconds, what Windows reports about the track and how loud Spotify's audio is. Two more:
+That records, for eight seconds, what Windows reports about the track and how loud Spotify's audio is. Three more:
 
 - `--probe-system` listens to everything the PC plays, not Spotify alone.
 - `--probe-lyrics "Title" "Artist"` looks one track up, for word timing and on LRCLIB.
+- `--probe-stats` prints one reading of every source the System widget uses.
 
 Errors go to `%LOCALAPPDATA%\inlay\inlay.log`. The lyrics cache is in the same folder and is safe to delete.
 
@@ -172,6 +177,7 @@ Drawn in CI snapshots where they draw something, but not exercised automatically
 - The word-by-word fill staying in time with a song.
 - The transport buttons and seeking.
 - Staying visible through Show Desktop (`Win+D`).
+- The System widget's readings, structures and sampler, on a real desktop.
 - Settings carrying over from the Deskbeat and Sonic Veil names.
 
 The macOS and Linux preview is built and checked in CI only; it has not been run on a real Mac or Linux desktop.

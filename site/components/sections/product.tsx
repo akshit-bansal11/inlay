@@ -29,6 +29,10 @@ const WIDGETS: { title: string; body: string }[] = [
     title: "Player",
     body: "Album art, title, artist, a progress bar you can click to seek, and previous, play/pause and next.",
   },
+  {
+    title: "System",
+    body: "CPU, RAM, GPU, video memory, each fixed and removable drive, network speed and battery. A strip, a list, a grid of tiles, or each reading placed freely; plain numbers, bars or rings; a warning colour past a threshold you set. It reads the PC itself, not Spotify.",
+  },
 ];
 
 // Ctrl+Alt plus the key, from HOTKEYS in crates/app/src/app.rs. The lyric nudge is
@@ -37,7 +41,7 @@ const HOTKEYS: { keys: string; does: string }[] = [
   { keys: "Ctrl+Alt+S", does: "Open settings" },
   {
     keys: "Ctrl+Alt+E",
-    does: "Edit layout: drag any element of the clock or player on its own, or drag the lyrics or visualizer to move them",
+    does: "Edit layout: drag any element of the clock or player on its own, a System reading, or drag the lyrics or visualizer to move them",
   },
   { keys: "Ctrl+Alt+H", does: "Hide or show every widget" },
   { keys: "Ctrl+Alt+Up", does: "Show lyrics 100 ms earlier" },
@@ -58,7 +62,7 @@ const LAYERS: { name: string; value: string; body: string }[] = [
   { name: "Always on top", value: "top", body: "Above everything." },
 ];
 
-// The five tabs are TABS in crates/app/src/settings.rs; the rows are that file's.
+// The six tabs are TABS in crates/app/src/settings.rs; the rows are that file's.
 const PANEL: { tab: string; covers: string }[] = [
   {
     tab: "General",
@@ -84,6 +88,11 @@ const PANEL: { tab: string; covers: string }[] = [
     tab: "Visualizer",
     covers:
       "Show it, a card behind it, its style (bars, mirrored bars or a wave), what it listens to (Spotify only, or everything), spanning the whole screen, turning it a quarter so the bars run down the screen, the number of bars, their width, the gap between them, roundness, dots for bars at rest, bass in the middle, and flipping left to right or upside down. Its colour: the accent, one colour or a gradient. Its motion: sensitivity, rise, fall, frames per second, treble boost and pitch range.",
+  },
+  {
+    tab: "System",
+    covers:
+      "Show it, a card behind it, its structure (strip, list, tiles or free), orientation, tile columns, meters (none, bar or ring), where names go, and the refresh rate. For each reading: whether it shows, its name, colour, warning level, percent or amount, and maximum. The order of the readings, network units, opacity, gap and padding, and Stay above windows for this widget alone.",
   },
 ];
 
@@ -186,6 +195,97 @@ const CONFIG: { key: string; value: string; means: string }[] = [
     value: "true",
     means: "Span the whole width of the screen, ignoring the frame's width.",
   },
+  { key: "stats.enabled", value: "true", means: "Show the System widget." },
+  {
+    key: "stats.structure",
+    value: '"strip"',
+    means: '"strip", "list", "tiles" or "free".',
+  },
+  { key: "stats.orientation", value: '"across"', means: '"across" or "down".' },
+  {
+    key: "stats.columns",
+    value: "4",
+    means: "Cells per row (across) or per column (down) in tiles, 1 to 9.",
+  },
+  { key: "stats.meter", value: '"none"', means: '"none", "bar" or "ring".' },
+  {
+    key: "stats.names",
+    value: '"before"',
+    means: '"before", "above", "after" or "hidden".',
+  },
+  {
+    key: "stats.refresh_ms",
+    value: "1000",
+    means: "How often the readings are sampled, 500 to 5000 ms.",
+  },
+  {
+    key: "stats.layer",
+    value: '"inherit"',
+    means: '"inherit" follows general.layer; "desktop", "normal" or "top" set this widget alone.',
+  },
+  {
+    key: "stats.order",
+    value: '["cpu", "ram", "gpu", "vram", "disks", "down", "up", "battery"]',
+    means: "Left to right, or top to bottom, in the order the readings are listed.",
+  },
+  {
+    key: "stats.net_units",
+    value: '"bytes"',
+    means: '"bytes" or "bits" per second for network speed.',
+  },
+  {
+    key: "stats.net_adapter",
+    value: '""',
+    means: "Count only the adapters whose name contains this text. Empty counts every adapter.",
+  },
+  {
+    key: "stats.drives",
+    value: '""',
+    means: "Empty shows every fixed and removable drive; otherwise only the letters listed.",
+  },
+  {
+    key: "stats.cpu.warn",
+    value: "90.0",
+    means: "The warning level as a percent; 0 never warns. The battery warns at or below its level while not charging.",
+  },
+  {
+    key: "stats.disks.name",
+    value: '"{drive}"',
+    means: "The name of each drive. {drive} is its letter and colon, such as C:.",
+  },
+  {
+    key: "stats.down.max",
+    value: "0",
+    means: "The top of a network meter, in bytes or bits per second. 0 uses the fastest rate seen this session.",
+  },
+];
+
+const SYSTEM_READINGS: { reading: string; shows: string }[] = [
+  { reading: "CPU", shows: "Total processor use, as a percent." },
+  {
+    reading: "RAM",
+    shows: "Memory in use, as a percent or as an amount out of the total.",
+  },
+  {
+    reading: "GPU",
+    shows: "Use of the busiest GPU engine, which is how Task Manager reports it.",
+  },
+  {
+    reading: "VRAM",
+    shows: "Video memory in use out of the adapter's total. An integrated GPU reports a small total, so its video memory reads small.",
+  },
+  {
+    reading: "Drives",
+    shows: "How full each fixed and removable drive is. Network and CD drives are skipped.",
+  },
+  {
+    reading: "Down and up",
+    shows: "Network speed in each direction, in bytes or bits per second, across every adapter or only those whose name contains the text set in config.toml.",
+  },
+  {
+    reading: "Battery",
+    shows: "Charge, and whether it is charging. Hidden on a PC without a battery.",
+  },
 ];
 
 const CLOCK_FORMATS: { spec: string; shows: string }[] = [
@@ -223,7 +323,7 @@ export function ProductSections() {
         </P>
         <P>
           It is not a skin engine. There are no plugins, no scripts and no user-authored
-          skins; every visual and behavioural parameter of the four widgets is a setting
+          skins; every visual and behavioural parameter of the five widgets is a setting
           instead.
         </P>
         <P>
@@ -499,6 +599,69 @@ export function ProductSections() {
       </Section>
 
       <Section
+        id="system"
+        eyebrow="Start here"
+        title="The System widget"
+        lede={
+          <>
+            CPU, RAM, GPU, video memory, drives, network speed and battery, read from the
+            PC itself. Nothing leaves the machine.
+          </>
+        }
+      >
+        <P>
+          It is the fifth widget. It is on by default for existing installs, in the top
+          right corner, and it works with Spotify closed.
+        </P>
+
+        <Sub>What it shows</Sub>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Reading</TableHead>
+              <TableHead>What it shows</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {SYSTEM_READINGS.map((row) => (
+              <TableRow key={row.reading}>
+                <TableCell className="font-bold whitespace-nowrap">
+                  {row.reading}
+                </TableCell>
+                <TableCell className="text-dim min-w-[20rem] leading-relaxed">
+                  {row.shows}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+
+        <Sub>Layout</Sub>
+        <P>
+          The readings run as a strip, a list, a grid of tiles, or are each placed freely,
+          across or down. Dragging a reading in edit layout switches the widget to the
+          free structure.
+        </P>
+
+        <Sub>Refresh</Sub>
+        <P>
+          The readings are sampled every <C>refresh_ms</C>: 1000 by default, and 500 to
+          5000 allowed. The sampler runs only while the widget is shown and not covered,
+          and the widget is redrawn only when a shown reading&apos;s text changes.
+        </P>
+
+        <Sub>Checking the readings</Sub>
+        <CodeBlock
+          title="Print one reading of every source"
+          code="inlay.exe --probe-stats"
+        />
+        <P>
+          The System tab of the settings panel covers the common choices. The{" "}
+          <C>[stats]</C> table in <C>config.toml</C> has the rest.
+        </P>
+      </Section>
+
+      <Section
         id="config"
         eyebrow="Start here"
         title="config.toml"
@@ -518,8 +681,8 @@ export function ProductSections() {
           could not.
         </P>
         <P>
-          The file has six tables: <C>[general]</C>, <C>[theme]</C>, <C>[clock]</C>,{" "}
-          <C>[player]</C>, <C>[lyrics]</C> and <C>[visualizer]</C>. Colours are{" "}
+          The file has seven tables: <C>[general]</C>, <C>[theme]</C>, <C>[clock]</C>,{" "}
+          <C>[player]</C>, <C>[lyrics]</C>, <C>[visualizer]</C> and <C>[stats]</C>. Colours are{" "}
           <C>#RRGGBB</C> or <C>#RRGGBBAA</C>; a text or bar colour can also be{" "}
           <C>&quot;text&quot;</C> or <C>&quot;accent&quot;</C>. These are the keys most
           worth knowing; the{" "}
