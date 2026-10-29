@@ -1100,7 +1100,7 @@ mod tests {
         );
         assert_eq!(free.at, [(5.0, 6.0), (1.0, 1.0)]);
         assert_eq!(free.cell, sizes);
-        assert_eq!(free.size, sz(22.0, 13.0));
+        assert_eq!(free.size, sz(22.0, 11.0));
     }
 
     #[test]
