@@ -28,7 +28,6 @@ pub const WM_APP_LYRICS: u32 = WM_APP + 2;
 pub const WM_APP_AUDIO: u32 = WM_APP + 3;
 pub const WM_APP_TRAY: u32 = WM_APP + 4;
 pub const WM_APP_SHOW_SETTINGS: u32 = WM_APP + 5;
-pub const WM_APP_STATS: u32 = WM_APP + 6;
 /// The `windows` crate keeps this one under the Controls feature.
 const WM_MOUSELEAVE: u32 = 0x02A3;
 
@@ -58,7 +57,6 @@ pub enum Event {
     Media,
     Lyrics,
     Audio,
-    Stats,
     ShowSettings,
     TaskbarCreated,
     /// Resolution, DPI or work area changed.
@@ -91,8 +89,7 @@ pub enum Event {
 thread_local! {
     static EVENTS: RefCell<VecDeque<Event>> = const { RefCell::new(VecDeque::new()) };
     static EDIT: Cell<bool> = const { Cell::new(false) };
-    /// Widget windows that refuse to leave the bottom of the z-order.
-    static PINNED: RefCell<Vec<isize>> = const { RefCell::new(Vec::new()) };
+    static PIN_BOTTOM: Cell<bool> = const { Cell::new(false) };
     static TASKBAR_CREATED: Cell<u32> = const { Cell::new(0) };
     /// Boxes, in each widget window's own pixels, that take the mouse in
     /// edit mode instead of moving the whole window.
@@ -140,12 +137,9 @@ fn on_part(hwnd: HWND, x: i32, y: i32) -> bool {
     })
 }
 
-/// Replaces the set of widget windows pinned to the bottom of the z-order.
-pub fn set_pinned(windows: &[HWND]) {
-    PINNED.with_borrow_mut(|pinned| {
-        pinned.clear();
-        pinned.extend(windows.iter().map(|hwnd| hwnd.0 as isize));
-    });
+/// While set, widget windows refuse to leave the bottom of the z-order.
+pub fn set_pin_bottom(on: bool) {
+    PIN_BOTTOM.set(on);
 }
 
 fn lparam_point(lp: LPARAM) -> (i32, i32) {
@@ -200,7 +194,6 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
         WM_APP_MEDIA => push(Event::Media),
         WM_APP_LYRICS => push(Event::Lyrics),
         WM_APP_AUDIO => push(Event::Audio),
-        WM_APP_STATS => push(Event::Stats),
         WM_APP_SHOW_SETTINGS => push(Event::ShowSettings),
         WM_APP_TRAY => push(Event::Tray(lp.0 as u32)),
         WM_HOTKEY => push(Event::Hotkey(wp.0 as i32)),
@@ -261,9 +254,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             };
             return LRESULT(0);
         }
-        WM_WINDOWPOSCHANGING
-            if is_widget && PINNED.with_borrow(|pinned| pinned.contains(&(hwnd.0 as isize))) =>
-        {
+        WM_WINDOWPOSCHANGING if is_widget && PIN_BOTTOM.get() => {
             // SAFETY: for this message lparam points at a WINDOWPOS owned by the caller.
             let pos = unsafe { &mut *(lp.0 as *mut WINDOWPOS) };
             pos.hwndInsertAfter = HWND_BOTTOM;

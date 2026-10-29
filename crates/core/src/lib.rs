@@ -11,6 +11,5 @@ pub mod lrc;
 pub mod lrclib;
 pub mod lyricsplus;
 pub mod mark;
-pub mod stats;
 pub mod timefmt;
 pub mod timing;

@@ -3,16 +3,12 @@
 pub mod clock;
 pub mod lyrics;
 pub mod player;
-pub mod stats;
 pub mod visualizer;
 
 use std::time::Duration;
 
 use inlay_core::color::{Rgba, parse_hex, with_alpha};
-use inlay_core::config::{
-    Align, ClockRow, Config, Direction, Frame, Label, Layer, Letters, PlayerPart, StatReading,
-};
-use inlay_core::stats::Sample;
+use inlay_core::config::{Align, ClockRow, Config, Direction, Frame, Label, Letters, PlayerPart};
 use inlay_core::timefmt::LocalTime;
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 use windows::Win32::Graphics::DirectWrite::IDWriteTextLayout;
@@ -63,7 +59,6 @@ pub struct Ctx<'a> {
     /// Bumped whenever `lyrics` is replaced.
     pub lyrics_gen: u64,
     pub audio: &'a Audio,
-    pub stats: &'a Sample,
     /// Milliseconds on the app's monotonic clock.
     pub now_ms: f64,
     pub time: LocalTime,
@@ -114,25 +109,10 @@ pub enum Kind {
     Player,
     Lyrics,
     Visualizer,
-    Stats,
 }
 
 impl Kind {
-    /// The layer this widget sits in: the System widget may differ.
-    pub fn layer(self, cfg: &Config) -> Layer {
-        match self {
-            Kind::Stats => cfg.stats.resolved_layer(&cfg.general),
-            _ => cfg.general.layer,
-        }
-    }
-
-    pub const ALL: [Kind; 5] = [
-        Kind::Visualizer,
-        Kind::Lyrics,
-        Kind::Clock,
-        Kind::Player,
-        Kind::Stats,
-    ];
+    pub const ALL: [Kind; 4] = [Kind::Visualizer, Kind::Lyrics, Kind::Clock, Kind::Player];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -140,7 +120,6 @@ impl Kind {
             Kind::Player => "Player",
             Kind::Lyrics => "Lyrics",
             Kind::Visualizer => "Visualizer",
-            Kind::Stats => "System",
         }
     }
 
@@ -150,7 +129,6 @@ impl Kind {
             Kind::Player => Box::new(player::Player::default()),
             Kind::Lyrics => Box::new(lyrics::LyricsView::default()),
             Kind::Visualizer => Box::new(visualizer::Visualizer::new()),
-            Kind::Stats => Box::new(stats::Stats::default()),
         }
     }
 
@@ -161,7 +139,6 @@ impl Kind {
             Kind::Player => cfg.player.frame,
             Kind::Lyrics => cfg.lyrics.frame,
             Kind::Visualizer => cfg.visualizer.placed(area_w),
-            Kind::Stats => cfg.stats.frame,
         }
     }
 
@@ -171,7 +148,6 @@ impl Kind {
             Kind::Player => &mut cfg.player.frame,
             Kind::Lyrics => &mut cfg.lyrics.frame,
             Kind::Visualizer => &mut cfg.visualizer.frame,
-            Kind::Stats => &mut cfg.stats.frame,
         }
     }
 
@@ -181,7 +157,6 @@ impl Kind {
             Kind::Player => cfg.player.enabled,
             Kind::Lyrics => cfg.lyrics.enabled,
             Kind::Visualizer => cfg.visualizer.enabled,
-            Kind::Stats => cfg.stats.enabled,
         }
     }
 
@@ -196,10 +171,6 @@ impl Kind {
             Kind::Player => PlayerPart::ALL
                 .get(id as usize)
                 .map(|&part| cfg.player.position_mut(part)),
-            Kind::Stats => StatReading::ALL.get(usize::from(id)).map(|&r| {
-                let reading = cfg.stats.reading_mut(r);
-                (&mut reading.x, &mut reading.y)
-            }),
             Kind::Lyrics | Kind::Visualizer => None,
         };
         if let Some((x, y)) = position {
@@ -211,7 +182,7 @@ impl Kind {
     /// Widgets with no box of their own: their window is kept wrapped around
     /// wherever their elements have been put.
     pub fn fitted(self) -> bool {
-        matches!(self, Kind::Clock | Kind::Player | Kind::Stats)
+        matches!(self, Kind::Clock | Kind::Player)
     }
 
     /// How many separately placed elements the widget has.
@@ -219,14 +190,13 @@ impl Kind {
         match self {
             Kind::Clock => ClockRow::ALL.len() as u8,
             Kind::Player => PlayerPart::ALL.len() as u8,
-            Kind::Stats => StatReading::ALL.len() as u8,
             Kind::Lyrics | Kind::Visualizer => 0,
         }
     }
 
     /// Widgets with nothing to show while Spotify is closed.
     pub fn needs_spotify(self) -> bool {
-        !matches!(self, Kind::Clock | Kind::Stats)
+        self != Kind::Clock
     }
 
     /// Widgets that take clicks; the rest are click-through.
@@ -269,13 +239,6 @@ pub struct Placed {
     offset: (f32, f32),
     /// The box the text itself covers.
     pub rect: D2D_RECT_F,
-}
-
-impl Placed {
-    /// Width and height of the laid-out text.
-    pub fn size(&self) -> (f32, f32) {
-        Gfx::measure(&self.layout)
-    }
 }
 
 /// Draws a placed label where, and whichever way up, it was laid out.
