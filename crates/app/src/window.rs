@@ -91,7 +91,8 @@ pub enum Event {
 thread_local! {
     static EVENTS: RefCell<VecDeque<Event>> = const { RefCell::new(VecDeque::new()) };
     static EDIT: Cell<bool> = const { Cell::new(false) };
-    static PIN_BOTTOM: Cell<bool> = const { Cell::new(false) };
+    /// Widget windows that refuse to leave the bottom of the z-order.
+    static PINNED: RefCell<Vec<isize>> = const { RefCell::new(Vec::new()) };
     static TASKBAR_CREATED: Cell<u32> = const { Cell::new(0) };
     /// Boxes, in each widget window's own pixels, that take the mouse in
     /// edit mode instead of moving the whole window.
@@ -139,9 +140,12 @@ fn on_part(hwnd: HWND, x: i32, y: i32) -> bool {
     })
 }
 
-/// While set, widget windows refuse to leave the bottom of the z-order.
-pub fn set_pin_bottom(on: bool) {
-    PIN_BOTTOM.set(on);
+/// Replaces the set of widget windows pinned to the bottom of the z-order.
+pub fn set_pinned(windows: &[HWND]) {
+    PINNED.with_borrow_mut(|pinned| {
+        pinned.clear();
+        pinned.extend(windows.iter().map(|hwnd| hwnd.0 as isize));
+    });
 }
 
 fn lparam_point(lp: LPARAM) -> (i32, i32) {
@@ -257,7 +261,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) 
             };
             return LRESULT(0);
         }
-        WM_WINDOWPOSCHANGING if is_widget && PIN_BOTTOM.get() => {
+        WM_WINDOWPOSCHANGING
+            if is_widget && PINNED.with_borrow(|pinned| pinned.contains(&(hwnd.0 as isize))) =>
+        {
             // SAFETY: for this message lparam points at a WINDOWPOS owned by the caller.
             let pos = unsafe { &mut *(lp.0 as *mut WINDOWPOS) };
             pos.hwndInsertAfter = HWND_BOTTOM;

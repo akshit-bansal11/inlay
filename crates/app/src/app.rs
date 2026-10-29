@@ -1119,17 +1119,25 @@ impl App {
     /// Keeps desktop-layer widgets visible through Show Desktop (Win+D), which
     /// raises the desktop over every window, bottom-pinned ones included.
     fn check_show_desktop(&mut self, foreground: HWND) {
-        if self.cfg.general.layer != Layer::Desktop || self.edit {
+        if self.edit {
             return;
         }
-        let Some(probe) = self.hosts.iter().find(|host| host.visible) else {
+        let desktop: Vec<usize> = (0..self.hosts.len())
+            .filter(|&i| self.hosts[i].kind.layer(&self.cfg) == Layer::Desktop)
+            .collect();
+        let Some(probe) = desktop
+            .iter()
+            .map(|&i| &self.hosts[i])
+            .find(|host| host.visible)
+        else {
             return;
         };
         let covered = window::desktop_covers(probe.hwnd);
         if covered && !self.raised {
             self.raised = true;
-            window::set_pin_bottom(false);
-            for host in &self.hosts {
+            window::set_pinned(&[]);
+            for &i in &desktop {
+                let host = &self.hosts[i];
                 // Topmost then not: lands at the top of the ordinary windows,
                 // which is just above the raised desktop.
                 window::set_z(host.hwnd, Z::Top);
@@ -1319,15 +1327,16 @@ impl App {
         self.scale = self.ui_scale * self.cfg.general.layout_scale(area_h);
         let scale = self.scale;
         let px = |dip: f32| (dip * scale).round() as i32;
-        let layer = self.cfg.general.layer;
         let pausing =
             self.cfg.general.pause_on_fullscreen && !self.edit && self.cover != Cover::None;
 
         // Unpinned while reordering, or the pin would undo it.
-        window::set_pin_bottom(false);
+        window::set_pinned(&[]);
         window::set_edit_mode(self.edit);
 
+        let mut pinned = Vec::new();
         for host in &mut self.hosts {
+            let layer = host.kind.layer(&self.cfg);
             let frame = host.kind.placed(&self.cfg, (aw as f32 / scale) as i32);
             let (left, top) =
                 frame.origin_within((aw as f32 / scale) as i32, (ah as f32 / scale) as i32);
@@ -1401,9 +1410,12 @@ impl App {
                 window::set_z(host.hwnd, Z::Normal);
                 window::set_z(host.hwnd, Z::Bottom);
             }
+            if layer == Layer::Desktop && !self.edit && !self.raised {
+                pinned.push(host.hwnd);
+            }
         }
 
-        window::set_pin_bottom(layer == Layer::Desktop && !self.edit && !self.raised);
+        window::set_pinned(&pinned);
         self.sync_sampler();
     }
 

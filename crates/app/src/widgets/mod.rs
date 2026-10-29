@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use inlay_core::color::{Rgba, parse_hex, with_alpha};
 use inlay_core::config::{
-    Align, ClockRow, Config, Direction, Frame, Label, Letters, PlayerPart, StatReading,
+    Align, ClockRow, Config, Direction, Frame, Label, Layer, Letters, PlayerPart, StatReading,
 };
 use inlay_core::stats::Sample;
 use inlay_core::timefmt::LocalTime;
@@ -118,6 +118,14 @@ pub enum Kind {
 }
 
 impl Kind {
+    /// The layer this widget sits in: the System widget may differ.
+    pub fn layer(self, cfg: &Config) -> Layer {
+        match self {
+            Kind::Stats => cfg.stats.resolved_layer(&cfg.general),
+            _ => cfg.general.layer,
+        }
+    }
+
     pub const ALL: [Kind; 5] = [
         Kind::Visualizer,
         Kind::Lyrics,
