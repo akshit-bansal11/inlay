@@ -237,17 +237,20 @@ const CONFIG: { key: string; value: string; means: string }[] = [
   {
     key: "stats.net_adapter",
     value: '""',
-    means: "Count only the adapters whose name contains this text. Empty counts every adapter.",
+    means:
+      "Count only the adapters whose name contains this text. Empty counts every adapter.",
   },
   {
     key: "stats.drives",
     value: '""',
-    means: "Empty shows every fixed and removable drive; otherwise only the letters listed.",
+    means:
+      "Empty shows every fixed and removable drive; otherwise only the letters listed.",
   },
   {
     key: "stats.cpu.warn",
     value: "90.0",
-    means: "The warning level as a percent; 0 never warns. The battery warns at or below its level while not charging.",
+    means:
+      "The warning level as a percent; 0 never warns. The battery warns at or below its level while not charging.",
   },
   {
     key: "stats.disks.name",
@@ -257,7 +260,8 @@ const CONFIG: { key: string; value: string; means: string }[] = [
   {
     key: "stats.down.max",
     value: "0",
-    means: "The top of a network meter, in bytes or bits per second. 0 uses the fastest rate seen this session.",
+    means:
+      "The top of a network meter, in bytes or bits per second. 0 uses the fastest rate seen this session.",
   },
 ];
 
@@ -273,15 +277,18 @@ const SYSTEM_READINGS: { reading: string; shows: string }[] = [
   },
   {
     reading: "VRAM",
-    shows: "Video memory in use out of the adapter's total. An integrated GPU reports a small total, so its video memory reads small.",
+    shows:
+      "Video memory in use out of the adapter's total. An integrated GPU reports a small total, so its video memory reads small.",
   },
   {
     reading: "Drives",
-    shows: "How full each fixed and removable drive is. Network and CD drives are skipped.",
+    shows:
+      "How full each fixed and removable drive is. Network and CD drives are skipped.",
   },
   {
     reading: "Down and up",
-    shows: "Network speed in each direction, in bytes or bits per second, across every adapter or only those whose name contains the text set in config.toml.",
+    shows:
+      "Network speed in each direction, in bytes or bits per second, across every adapter or only those whose name contains the text set in config.toml.",
   },
   {
     reading: "Battery",
@@ -605,8 +612,8 @@ export function ProductSections() {
         title="The System widget"
         lede={
           <>
-            CPU, RAM, GPU, video memory, drives, network speed and battery, read from the
-            PC itself. Nothing leaves the machine.
+            CPU, RAM, GPU, video memory, drives, network speed and battery, read from
+            the PC itself. Nothing leaves the machine.
           </>
         }
       >
@@ -639,9 +646,9 @@ export function ProductSections() {
 
         <Sub>Layout</Sub>
         <P>
-          The readings run as a strip, a list, a grid of tiles, or are each placed freely,
-          across or down. Dragging a reading in edit layout switches the widget to the
-          free structure.
+          The readings run as a strip, a list, a grid of tiles, or are each placed
+          freely, across or down. Dragging a reading in edit layout switches the widget
+          to the free structure.
         </P>
 
         <Sub>Refresh</Sub>
@@ -683,10 +690,10 @@ export function ProductSections() {
         </P>
         <P>
           The file has seven tables: <C>[general]</C>, <C>[theme]</C>, <C>[clock]</C>,{" "}
-          <C>[player]</C>, <C>[lyrics]</C>, <C>[visualizer]</C> and <C>[stats]</C>. Colours are{" "}
-          <C>#RRGGBB</C> or <C>#RRGGBBAA</C>; a text or bar colour can also be{" "}
-          <C>&quot;text&quot;</C> or <C>&quot;accent&quot;</C>. These are the keys most
-          worth knowing; the{" "}
+          <C>[player]</C>, <C>[lyrics]</C>, <C>[visualizer]</C> and <C>[stats]</C>.
+          Colours are <C>#RRGGBB</C> or <C>#RRGGBBAA</C>; a text or bar colour can also
+          be <C>&quot;text&quot;</C> or <C>&quot;accent&quot;</C>. These are the keys
+          most worth knowing; the{" "}
           <ExternalLink href={`${REPO}/blob/main/crates/core/src/config.rs`}>
             schema
           </ExternalLink>{" "}
