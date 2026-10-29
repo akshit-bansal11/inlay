@@ -8,9 +8,11 @@ use std::sync::atomic::Ordering;
 
 use inlay_core::color::{accent_from_bgra, downsample_bgra};
 use inlay_core::config::{
-    Config, Direction, Letters, LyricsMode, PlayerLayout, Preset, VisualizerStyle,
+    Anchor, Config, Direction, Frame, Letters, LyricsMode, PlayerLayout, Preset, StatsCfg,
+    StatsMeter, StatsNames, StatsOrientation, StatsStructure, VisualizerStyle,
 };
 use inlay_core::lrc::parse_lrc;
+use inlay_core::stats::{Battery, Disk, Sample, Usage};
 use inlay_core::timefmt::LocalTime;
 use inlay_core::timing::normalize_lines;
 use windows::Win32::Foundation::{E_FAIL, GENERIC_WRITE};
@@ -132,6 +134,53 @@ fn fake_media() -> MediaState {
     }
 }
 
+/// A made-up reading of a machine, one value of which is past its warning.
+fn fake_stats() -> Sample {
+    const GIB: u64 = 1 << 30;
+    Sample {
+        cpu: Some(14.0),
+        ram: Some(Usage {
+            used: 93 * GIB / 10,
+            total: 16 * GIB,
+        }),
+        gpu: Some(9.0),
+        vram: Some(Usage {
+            used: 18 * GIB / 10,
+            total: 8 * GIB,
+        }),
+        disks: vec![
+            Disk {
+                letter: 'C',
+                used: 424 * GIB,
+                total: 465 * GIB,
+            },
+            Disk {
+                letter: 'D',
+                used: 344 * GIB,
+                total: 931 * GIB,
+            },
+        ],
+        down: Some(4_200_000.0),
+        up: Some(310_000.0),
+        battery: Some(Battery {
+            percent: 82.0,
+            charging: true,
+        }),
+    }
+}
+
+/// Only the System widget, in the corner, set up by `style`.
+fn stats_look(w: u32, h: u32, style: impl FnOnce(&mut StatsCfg)) -> Config {
+    let mut cfg = Config::default();
+    cfg.clock.enabled = false;
+    cfg.player.enabled = false;
+    cfg.lyrics.enabled = false;
+    cfg.visualizer.enabled = false;
+    cfg.stats.frame = Frame::new(Anchor::TopLeft, 56, 48, w, h);
+    style(&mut cfg.stats);
+    cfg
+}
+
 pub fn run(dir: &Path) -> Result<()> {
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
     std::fs::create_dir_all(dir).map_err(|_| Error::from(E_FAIL))?;
@@ -139,6 +188,7 @@ pub fn run(dir: &Path) -> Result<()> {
         unsafe { CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)? };
 
     let media = fake_media();
+    let stats = fake_stats();
     let audio = fake_audio();
     let lyrics = Lyrics::Synced(normalize_lines(
         &parse_lrc(LYRICS).lines,
@@ -174,7 +224,7 @@ pub fn run(dir: &Path) -> Result<()> {
     // Bars hanging from the top edge of the screen.
     let mut hanging = Config::default();
     hanging.visualizer.flip_y = true;
-    hanging.visualizer.frame.anchor = inlay_core::config::Anchor::Top;
+    hanging.visualizer.frame.anchor = Anchor::Top;
     hanging.clock.frame.y = 200;
     // Text every way it can run: a column of upright letters, a line on its
     // side reading down, and one reading up.
@@ -186,10 +236,41 @@ pub fn run(dir: &Path) -> Result<()> {
     hanging.player.artist.letters = Letters::Sideways;
     looks.push(("flipped".to_owned(), hanging));
 
+    // The System widget in each of its structures.
+    looks.push((
+        "stats-strip-across".to_owned(),
+        stats_look(1100, 44, |_| {}),
+    ));
+    looks.push((
+        "stats-strip-down".to_owned(),
+        stats_look(240, 360, |s| {
+            s.orientation = StatsOrientation::Down;
+            s.meter = StatsMeter::Bar;
+        }),
+    ));
+    looks.push((
+        "stats-list".to_owned(),
+        stats_look(260, 380, |s| {
+            s.structure = StatsStructure::List;
+            s.meter = StatsMeter::Bar;
+            s.names = StatsNames::After;
+        }),
+    ));
+    looks.push((
+        "stats-tiles-rings".to_owned(),
+        stats_look(760, 200, |s| {
+            s.structure = StatsStructure::Tiles;
+            s.columns = 4;
+            s.meter = StatsMeter::Ring;
+            s.card = true;
+            s.names = StatsNames::Above;
+        }),
+    ));
+
     for (name, cfg) in &looks {
         let path = dir.join(format!("{name}.png"));
         png(&wic, &path, (WIDTH, HEIGHT), |gfx| {
-            scene(gfx, cfg, &media, &lyrics, &audio)
+            scene(gfx, cfg, &media, &lyrics, &audio, &stats)
         })?;
         println!("wrote {}", path.display());
     }
@@ -203,6 +284,7 @@ pub fn run(dir: &Path) -> Result<()> {
         ("player-buttons", 2, 4),
         ("lyrics", 3, 0),
         ("visualizer", 4, 0),
+        ("system", 5, 0),
     ] {
         let path = dir.join(format!("settings-{name}.png"));
         png(&wic, &path, panel, |gfx| settings_page(gfx, tab, section))?;
@@ -267,16 +349,16 @@ fn scene(
     media: &MediaState,
     lyrics: &Lyrics,
     audio: &Audio,
+    stats: &Sample,
 ) -> Result<()> {
     let palette = Palette::new(cfg);
-    let stats = inlay_core::stats::Sample::default();
     let ctx_at = |now_ms: f64| Ctx {
         cfg,
         media,
         lyrics,
         lyrics_gen: 1,
         audio,
-        stats: &stats,
+        stats,
         now_ms,
         time: LocalTime {
             year: 2026,
