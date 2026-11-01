@@ -29,7 +29,7 @@ image = { version = "=0.25.10", default-features = false, features = ["png", "jp
 ureq = "=3.4.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-tray-icon = "=0.26.0"
+tray-icon = "=0.26.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # The KSNI backend talks D-Bus itself: no GTK main loop to run beside the window.
