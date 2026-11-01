@@ -91,7 +91,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item target/release/inlay.exe "dist/Inlay-$env:VERSION.exe"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dist-windows
           path: dist/*
@@ -148,7 +148,7 @@ jobs:
           codesign --force --deep --sign - "$app"
           mkdir -p dist
           ditto -c -k --keepParent "$app" "dist/Inlay-$VERSION-macos.zip"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dist-macos
           path: dist/*
@@ -181,7 +181,7 @@ jobs:
           cp target/release/inlay-desk "$dir/inlay"
           cp README.md LICENSE "$dir/"
           tar -czf "dist/Inlay-$VERSION-linux-x86_64.tar.gz" "$dir"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dist-linux
           path: dist/*
